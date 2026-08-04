@@ -1,0 +1,48 @@
+[project]
+name = "nepal-climate-service-demo"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Public demo instance of Open Climate Service, configured to the Nepal extent"
+dependencies = [
+    # Tracks git main rather than a PyPI release *on purpose*, and only until read-only
+    # mode ships. CLIM-848 asks for a released pin so demos don't break on main, but
+    # `read_only: true` (CLIM-861) is not in 0.1.0 — and an unrecognised config key is
+    # silently ignored, which would leave this public instance fully writable. Tracking
+    # main is the lesser risk of the two.
+    #
+    # TODO: re-pin to `open-climate-service[server]==<first release with read-only mode>`
+    # and drop the [tool.uv.sources] block below.
+    "open-climate-service[server]",
+]
+
+# No instance-specific dependencies: this demo runs the built-in datasets only, and their
+# runtime deps (ecmwf-datastores-client for ERA5-Land, netcdf4) are part of the [server]
+# extra. Anything added here would mean a custom plugin had crept in.
+
+[tool.uv]
+package = false
+# Required for uv to resolve the [server] extra: these relax upstream transitive pins —
+# openeo-pg-parser-networkx pins geojson-pydantic<2 (we need >=2.1.0) and
+# openeo-processes-dask pins an older zarr (Open-EO/openeo-processes-dask#376).
+# Keep in step with the same block in the open-climate-service repo.
+override-dependencies = [
+    "geojson-pydantic>=2.1.0",
+    "zarr>=3.1.6",
+    "pyarrow>=19.0",
+    "xarray>=2025.12.0",
+    "numpy>=2.2",
+    "dask>=2024.1.0",
+    "dask-geopandas>=0.4",
+    "geopandas>=1.1",
+    "xvec>=0.3",
+    "rioxarray>=0.17",
+    "pystac>=1.10",
+]
+
+[tool.uv.sources]
+# Temporarily the read-only branch, not main: read-only mode is unmerged (PR #329), and on
+# a build without it `read_only: true` is silently ignored and this public instance serves
+# every write endpoint. Verified by observation, not assumed — on main, `POST /ingestions`
+# returns 422 rather than 403 and `/info` has no `read_only` field at all.
+# Switch back to `branch = "main"` the moment #329 lands, then re-pin to a release.
+open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "feat/read-only-mode" }

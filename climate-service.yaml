@@ -1,0 +1,23 @@
+id: nepal-climate-service-demo
+name: Nepal Climate Service (Demo)
+
+extent:
+  name: Nepal
+  bbox: [80.05, 26.35, 88.20, 30.45]
+  country_code: NPL
+
+data_dir: ./data
+
+# Public demo: browsable but not modifiable. Refuses ingestion, sync, stored process
+# graphs, batch jobs and the /manage console; keeps the catalogue, the data endpoints,
+# the map viewer and synchronous `POST /result` execution.
+#
+# Ingestion is an operator task run on the host — see "Ingesting data" in README.md.
+#
+# REQUIRES a version of open-climate-service that implements read-only mode. On a build
+# without it this key is silently ignored and the instance is fully writable. See the
+# pinning note in pyproject.toml.
+read_only: true
+
+# No plugins_dir: this instance deliberately runs the built-in datasets, processes and
+# workflows only, so it demonstrates stock Open Climate Service behaviour.
