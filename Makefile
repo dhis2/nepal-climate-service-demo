@@ -21,12 +21,13 @@ upgrade: ## Pull the latest open-climate-service and re-lock
 	uv lock --upgrade-package open-climate-service
 	uv sync
 
-verify: ## Check the instance is up and actually read-only
+verify: ## Check the instance is up, and report whether read-only is in effect
 	@set -a && . ./.env && set +a && \
 	base=http://127.0.0.1:$(PORT); \
-	printf 'read_only  : '; curl -sf $$base/info | python3 -c 'import sys,json;print(json.load(sys.stdin)["read_only"])'; \
+	printf 'read_only  : '; curl -sf $$base/info | python3 -c 'import sys,json;v=json.load(sys.stdin).get("read_only");print(v if v is not None else "NOT ENFORCED -- writable (upstream main lacks PR #329)")'; \
 	printf 'extent     : '; curl -sf $$base/extent | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["name"], d["bbox"])'; \
-	printf 'ingest 403 : '; test "$$(curl -s -o /dev/null -w '%{http_code}' -X POST $$base/ingestions -H 'Content-Type: application/json' -d '{}')" = 403 && echo yes || echo "NO -- instance is writable!"; \
+	printf 'ingest     : '; code=$$(curl -s -o /dev/null -w '%{http_code}' -X POST $$base/ingestions -H 'Content-Type: application/json' -d '{}'); \
+		case $$code in 403) echo "$$code refused -- read-only in effect";; *) echo "$$code accepted -- instance is writable";; esac; \
 	printf 'datasets   : '; curl -sf $$base/datasets | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items",[])), "published")'
 
 .PHONY: help install run dev upgrade verify

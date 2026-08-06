@@ -1,17 +1,21 @@
 [project]
 name = "nepal-climate-service-demo"
 version = "0.1.0"
-requires-python = ">=3.12"
+# Pinned to 3.12, matching upstream's own .python-version, rather than upstream's looser
+# `>=3.12`. This is a deployment, not a library: it should run the interpreter upstream
+# builds and tests against, not whatever is newest. Without the upper bound uv resolved a
+# 3.13 environment here, which also left the PROJ_DATA hint in .env.example pointing at a
+# site-packages path that did not exist. The matching .python-version selects it.
+requires-python = ">=3.12,<3.13"
 description = "Public demo instance of Open Climate Service, configured to the Nepal extent"
 dependencies = [
-    # Tracks git main rather than a PyPI release *on purpose*, and only until read-only
-    # mode ships. CLIM-848 asks for a released pin so demos don't break on main, but
-    # `read_only: true` (CLIM-861) is not in 0.1.0 — and an unrecognised config key is
-    # silently ignored, which would leave this public instance fully writable. Tracking
-    # main is the lesser risk of the two.
+    # Tracks git main rather than a PyPI release because there is no release to track:
+    # open-climate-service has published no tags and no releases at all. CLIM-848 asks for
+    # a released pin so demos don't break when main moves; until one exists, main is the
+    # only option, and `make upgrade` followed by `make verify` is what keeps it honest.
     #
-    # TODO: re-pin to `open-climate-service[server]==<first release with read-only mode>`
-    # and drop the [tool.uv.sources] block below.
+    # TODO: re-pin to `open-climate-service[server]==<first release>` and drop the
+    # [tool.uv.sources] block below, once upstream cuts one.
     "open-climate-service[server]",
 ]
 
@@ -40,9 +44,14 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-# Temporarily the read-only branch, not main: read-only mode is unmerged (PR #329), and on
-# a build without it `read_only: true` is silently ignored and this public instance serves
-# every write endpoint. Verified by observation, not assumed — on main, `POST /ingestions`
-# returns 422 rather than 403 and `/info` has no `read_only` field at all.
-# Switch back to `branch = "main"` the moment #329 lands, then re-pin to a release.
-open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "feat/read-only-mode" }
+# Main, deliberately — not the read-only branch. Read-only mode is still unmerged
+# (PR #329), so this pin does NOT enforce it: `read_only: true` in climate-service.yaml is
+# an unrecognised key on main, and config is read as a plain dict, so it is silently
+# ignored and every write endpoint is served. Verified by observation, not assumed — on
+# main `POST /ingestions` returns 422 rather than 403, `/info` has no `read_only` field,
+# and the `/manage` console is reachable.
+#
+# That consequence is deliberate and documented: see "Read-only" in README.md. Do not
+# expose this instance publicly on this pin. When #329 lands, `read_only: true` starts
+# taking effect on its own and `make verify` starts reporting it — nothing to change here.
+open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "main" }
