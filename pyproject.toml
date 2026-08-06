@@ -1,17 +1,15 @@
 [project]
 name = "nepal-climate-service-demo"
 version = "0.1.0"
-requires-python = ">=3.12"
+# 3.12 to match upstream's .python-version; the upper bound stops uv resolving 3.13.
+requires-python = ">=3.12,<3.13"
 description = "Public demo instance of Open Climate Service, configured to the Nepal extent"
 dependencies = [
-    # Tracks git main rather than a PyPI release *on purpose*, and only until read-only
-    # mode ships. CLIM-848 asks for a released pin so demos don't break on main, but
-    # `read_only: true` (CLIM-861) is not in 0.1.0 — and an unrecognised config key is
-    # silently ignored, which would leave this public instance fully writable. Tracking
-    # main is the lesser risk of the two.
+    # Upstream has published no releases, so this tracks git main. CLIM-848 wants a
+    # released pin.
     #
-    # TODO: re-pin to `open-climate-service[server]==<first release with read-only mode>`
-    # and drop the [tool.uv.sources] block below.
+    # TODO: re-pin to `open-climate-service[server]==<first release>` and drop the
+    # [tool.uv.sources] block below.
     "open-climate-service[server]",
 ]
 
@@ -40,9 +38,7 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-# Temporarily the read-only branch, not main: read-only mode is unmerged (PR #329), and on
-# a build without it `read_only: true` is silently ignored and this public instance serves
-# every write endpoint. Verified by observation, not assumed — on main, `POST /ingestions`
-# returns 422 rather than 403 and `/info` has no `read_only` field at all.
-# Switch back to `branch = "main"` the moment #329 lands, then re-pin to a release.
-open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "feat/read-only-mode" }
+# Read-only mode is unmerged (PR #329), so `read_only: true` in climate-service.yaml is
+# ignored on main and this instance is writable. Do not expose it publicly on this pin.
+# See "Read-only" in README.md.
+open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "main" }

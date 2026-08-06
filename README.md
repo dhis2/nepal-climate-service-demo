@@ -36,10 +36,22 @@ Available from the built-in templates:
 
 `GET /dataset-templates/` lists them all with their parameters.
 
-## Read-only
+## Read-only — not yet in effect
 
-`climate-service.yaml` sets `read_only: true`. Visitors can browse and compute; nobody can
-change anything.
+`climate-service.yaml` sets `read_only: true`, but **this instance is currently writable.**
+The dependency tracks open-climate-service `main`, and read-only mode is still unmerged
+there (PR #329). Config on `main` is read as a plain dict, so an unrecognised `read_only`
+key is silently ignored rather than rejected: the service starts normally and serves every
+write endpoint — ingestion, sync, stored process graphs, batch jobs and the `/manage`
+console.
+
+**Do not expose this instance publicly as it stands.** Until #329 lands it needs to stay
+private, or sit behind a reverse proxy that allowlists the read paths — see Deployment
+notes.
+
+The key is kept in the config deliberately rather than deleted: it records the intended
+posture, and it begins taking effect on its own once #329 merges, with nothing to change
+here. What it will do then:
 
 | | |
 | --- | --- |
@@ -51,17 +63,18 @@ POST only because the process graph travels in the request body, and it cannot p
 dataset. Batch jobs are closed entirely rather than made read-only: there is no request
 identity yet, so the job namespace would be shared between visitors.
 
-`GET /info` reports `read_only`, and the openEO capabilities document at `GET /?f=json`
-omits the endpoints that would refuse, so clients discover the reduced surface rather than
-finding it by failing.
+Once read-only is in effect, `GET /info` reports it and the openEO capabilities document at
+`GET /?f=json` omits the endpoints that would refuse, so clients discover the reduced
+surface rather than finding it by failing.
 
-> **Check this after every deploy.** `read_only` is an ordinary config key, so a build of
-> open-climate-service that predates read-only mode ignores it silently and serves a fully
-> writable instance. `make verify` asserts it, or:
+> **Check this after every deploy, and after every `make upgrade`** — the pin tracks a
+> moving branch. `make verify` reports the current state; it does not fail when the
+> instance is writable, because on this pin that is the expected result.
 >
 > ```bash
-> curl -s https://<host>/info | grep read_only          # must be true
-> curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/ingestions -d '{}'   # must be 403
+> curl -s https://<host>/info | grep read_only   # absent today; `true` once #329 lands
+> curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/ingestions -d '{}'
+> #   422 today — the request is accepted and validated; 403 once read-only is in effect
 > ```
 
 ## Running it
@@ -75,9 +88,10 @@ make verify               # confirm it is up and read-only
 
 ## Ingesting data
 
-Read-only applies to HTTP, so ingestion is an operator task performed on the host. This is
-what lets the switch be absolute: there is no exemption, token or trusted header that could
-be misconfigured into a bypass.
+Ingestion is an operator task performed on the host. The HTTP ingestion endpoints happen to
+be reachable on the current pin, but the host-side call is still the supported path — it is
+what lets read-only be absolute once it is in effect, with no exemption, token or trusted
+header that could be misconfigured into a bypass.
 
 ERA5-Land needs Copernicus Climate Data Store credentials in `~/.ecmwfdatastoresrc`;
 CHIRPS3 and WorldPop are public.
@@ -107,15 +121,18 @@ Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
 
 ## Deployment notes
 
-- **Pin to a release.** `pyproject.toml` currently tracks git `main`, because read-only
-  mode is not in 0.1.0 and shipping without it would leave this instance writable. Re-pin
-  to the first release that contains it — see the TODO in `pyproject.toml`.
+- **Pin to a release once one exists.** `pyproject.toml` tracks git `main` because upstream
+  has published no tags and no releases at all, so there is nothing to pin to yet. The
+  dependency therefore moves underneath you: re-run `make verify` after every
+  `make upgrade`. See the TODO in `pyproject.toml`.
 - **Set `CLIMATE_SERVICE_BASE_URL`** to the public HTTPS URL, or STAC and openEO links will
   point at the internal host.
 - **CORS** is already permissive on the data and STAC routes, which is what browser clients
   (GeoLibre, STAC Browser, the openEO editor) need cross-origin.
-- **Read-only protects integrity, not availability.** `POST /result` is still an unbounded
-  compute endpoint. A public deployment should sit behind a reverse proxy that allowlists
+- **The reverse proxy is currently load-bearing for integrity, not just availability.**
+  With read-only not yet in effect, an allowlist proxy is the only thing that would keep
+  the write endpoints closed. And even once read-only lands, `POST /result` remains an
+  unbounded compute endpoint. A public deployment should sit behind a proxy that allowlists
   the open routes — an allowlist, not a denylist, so routes added in a later release aren't
   permitted by default — and applies request timeouts, body-size limits and per-IP rate
   limiting. Tracked as [CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
