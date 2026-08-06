@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8003}:8003"
+    environment:
+      CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  data:

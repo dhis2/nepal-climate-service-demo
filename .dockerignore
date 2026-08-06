@@ -1,0 +1,21 @@
+.venv/
+.git/
+.env
+.env.*
+!.env.example
+
+# Ingested stores and job state are runtime data — the image ships an empty data dir.
+data/
+
+__pycache__/
+.DS_Store
+.claude/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+Dockerfile
+.dockerignore
+compose*.yml
+Makefile
+README.md
