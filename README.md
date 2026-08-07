@@ -265,9 +265,9 @@ wanted and unavailable. Object-store backing would also retire the absolute-path
 below, since stores would live at a stable URI rather than a machine-specific path.
 Relevant to hosting, [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
 
-**The artifact registry is not portable, and need not be.** `records.json` stores resolved
-absolute paths, so a data directory is only servable at the path it was ingested under —
-copy it anywhere else and the catalogue is silently empty.
+**The artifact registry could easily be portable, and is not.** `records.json` stores
+resolved absolute paths, so a data directory is only servable at the path it was ingested
+under — copy it anywhere else and the catalogue is silently empty.
 
 This is a choice, not a storage constraint. Icechunk accepts relative paths for both create
 and open; the absoluteness comes from `services.py:405` explicitly calling
