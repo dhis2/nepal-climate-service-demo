@@ -1,6 +1,8 @@
 services:
   api:
     image: ghcr.io/dhis2/open-climate-service:${OCS_TAG:-main}
+    # :main is rebuilt on every upstream push, so re-pull rather than reuse a stale cache.
+    pull_policy: always
     # Published for linux/amd64 only, so it runs emulated on arm64 hosts.
     platform: linux/amd64
     init: true

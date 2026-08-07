@@ -2,49 +2,30 @@
 
 PORT ?= 8003
 
-# Override to run the published image instead of building:
-#   make docker-up COMPOSE=compose.ghcr.yml
+# compose.yml builds from this repo's pin; compose.ghcr.yml pulls the published image:
+#   make docker-run COMPOSE=compose.ghcr.yml
 COMPOSE ?= compose.yml
+
+# .env is optional — without it the repo's own config is used.
+LOAD_ENV = set -a; [ -f .env ] && . ./.env; set +a; \
+	export CLIMATE_SERVICE_CONFIG=$${CLIMATE_SERVICE_CONFIG:-climate-service.yaml};
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
-install: ## Install dependencies with uv
-	uv sync
+# TODO: decide whether a local venv is needed at all, or whether Docker is the only
+# supported path. If Docker-only, run and upgrade go.
+run: ## Start the service in a virtualenv, on http://127.0.0.1:8003
+	@$(LOAD_ENV) uv run uvicorn open_climate_service.main:app --port $(PORT)
 
-run: ## Start the service (read-only, per climate-service.yaml)
-	set -a && . ./.env && set +a && \
-		uv run uvicorn open_climate_service.main:app --port $(PORT)
-
-dev: ## Start with autoreload, for editing the config
-	set -a && . ./.env && set +a && \
-		uv run uvicorn open_climate_service.main:app --reload \
-			--reload-include "*.yaml" --reload-include "*.yml" --port $(PORT)
-
-upgrade: ## Pull the latest open-climate-service and re-lock
-	uv lock --upgrade-package open-climate-service
-	uv sync
-
-docker-build: ## Build the container image
-	docker compose -f $(COMPOSE) build
-
-docker-run: ## Start the service in Docker in the foreground
+docker-run: ## Start the service in Docker
 	docker compose -f $(COMPOSE) up --build
-
-docker-up: ## Start the service in Docker, detached
-	docker compose -f $(COMPOSE) up -d --build
 
 docker-down: ## Stop the Docker service, keeping the data volume
 	docker compose -f $(COMPOSE) down
 
-docker-logs: ## Follow the container logs
-	docker compose -f $(COMPOSE) logs -f
-
-docker-shell: ## Shell into the running container, for operator tasks like ingestion
-	docker compose -f $(COMPOSE) exec api sh
-
-verify: ## Check the instance is up, and report whether read-only is in effect
-	@set -a && . ./.env 2>/dev/null || true; set +a; \
+verify: ## Report what the running instance serves
+	@$(LOAD_ENV) \
 	base=http://127.0.0.1:$(PORT); \
 	printf 'read_only  : '; curl -sf $$base/info | python3 -c 'import sys,json;v=json.load(sys.stdin).get("read_only");print(v if v is not None else "NOT ENFORCED -- writable (upstream main lacks PR #329)")'; \
 	printf 'extent     : '; curl -sf $$base/extent | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["name"], d["bbox"])'; \
@@ -52,4 +33,8 @@ verify: ## Check the instance is up, and report whether read-only is in effect
 		case $$code in 403) echo "$$code refused -- read-only in effect";; *) echo "$$code accepted -- instance is writable";; esac; \
 	printf 'datasets   : '; curl -sf $$base/datasets | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items",[])), "published")'
 
-.PHONY: help install run dev upgrade docker-build docker-run docker-up docker-down docker-logs docker-shell verify
+upgrade: ## Pull the latest open-climate-service and re-lock
+	uv lock --upgrade-package open-climate-service
+	uv sync
+
+.PHONY: help run docker-run docker-down verify upgrade
