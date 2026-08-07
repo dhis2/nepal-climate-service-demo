@@ -23,7 +23,4 @@ services:
     volumes:
       # Not baked into the upstream image, unlike the one built from this repo.
       - ./climate-service.yaml:/app/climate-service.yaml:ro
-      - data:/app/data
-
-volumes:
-  data:
+      - ${DATA_DIR:-./data}:/app/data

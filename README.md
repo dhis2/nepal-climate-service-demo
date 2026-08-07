@@ -39,43 +39,26 @@ Available from the built-in templates:
 ## Read-only — not yet in effect
 
 `climate-service.yaml` sets `read_only: true`, but **this instance is currently writable.**
-The dependency tracks open-climate-service `main`, and read-only mode is still unmerged
-there (PR #329). Config on `main` is read as a plain dict, so an unrecognised `read_only`
-key is silently ignored rather than rejected: the service starts normally and serves every
-write endpoint — ingestion, sync, stored process graphs, batch jobs and the `/manage`
-console.
+Read-only mode is unmerged upstream (PR #329) and config there is read as a plain dict, so
+the key is ignored rather than rejected: every write endpoint is served, including
+ingestion, sync, batch jobs and the `/manage` console.
 
-**Do not expose this instance publicly as it stands.** Until #329 lands it needs to stay
-private, or sit behind a reverse proxy that allowlists the read paths — see Deployment
-notes.
-
-The key is kept in the config deliberately rather than deleted: it records the intended
-posture, and it begins taking effect on its own once #329 merges, with nothing to change
-here. What it will do then:
+**Do not expose it publicly as it stands** — keep it private or behind an allowlist proxy
+until #329 lands. The key is kept rather than deleted because it takes effect on its own
+once that happens. What it will do then:
 
 | | |
 | --- | --- |
 | **Open** | `/collections`, `/stac`, `/datasets`, `/processes`, `/process_graphs`, `/extent`, `/zarr/…`, `/icechunk/…`, the landing page, `/map`, and `POST /result` |
 | **Refused (403)** | ingestion and sync, the `/manage` console, `PUT`/`DELETE /process_graphs/{id}`, and batch jobs |
 
-`POST /result` stays open because it is how anyone actually *uses* the instance — it is a
-POST only because the process graph travels in the request body, and it cannot publish a
-dataset. Batch jobs are closed entirely rather than made read-only: there is no request
-identity yet, so the job namespace would be shared between visitors.
+`POST /result` stays open because it is how the instance is actually used — it is a POST
+only because the process graph travels in the body, and it cannot publish a dataset. Batch
+jobs close entirely: there is no request identity, so the job namespace would be shared
+between visitors.
 
-Once read-only is in effect, `GET /info` reports it and the openEO capabilities document at
-`GET /?f=json` omits the endpoints that would refuse, so clients discover the reduced
-surface rather than finding it by failing.
-
-> **Check this after every deploy, and after every `make upgrade`** — the pin tracks a
-> moving branch. `make verify` reports the current state; it does not fail when the
-> instance is writable, because on this pin that is the expected result.
->
-> ```bash
-> curl -s https://<host>/info | grep read_only   # absent today; `true` once #329 lands
-> curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/ingestions -d '{}'
-> #   422 today — the request is accepted and validated; 403 once read-only is in effect
-> ```
+`make verify` reports the current state — run it after every deploy and every
+`make upgrade`, since the pin tracks a moving branch.
 
 ## Running it
 
@@ -113,8 +96,32 @@ moves when upstream does — it re-pulls on every start rather than reusing a st
 It is `linux/amd64` only, so it runs emulated on arm64. `COMPOSE=compose.ghcr.yml` works
 with `docker-down` too.
 
-Both run as the `ocs` user (uid/gid 999) and keep ingested data in a named `data` volume.
-For operator tasks like ingestion, `docker compose exec api sh` gets you a shell inside.
+Both run as the `ocs` user (uid/gid 999). For operator tasks, `docker compose exec api sh`
+gets you a shell inside.
+
+### Where the data lives
+
+`./data` on the host is bind-mounted to `/app/data` in the container, so the stores the
+instance serves are ordinary files you can reach. That is the point: data can be produced
+somewhere else and copied in, which is the expected path for a read-only instance that
+never ingests anything itself.
+
+```bash
+scp -r stores/* server:/srv/nepal-climate-service-demo/data/
+```
+
+Anything valid that lands there is served after a restart. Point somewhere else with
+`DATA_DIR=/srv/climate-data make docker-run`. To move an existing named volume onto the
+host: `docker compose cp api:/app/data ./data`.
+
+**Ownership differs by platform.** Docker Desktop on macOS remaps ownership, so the
+container reads and writes host files whatever they are owned by. On Linux the host uid is
+preserved, and the container runs as 999 — so `chown -R 999:999 data` on the host, or the
+service cannot write, and cannot read files that are not world-readable.
+
+Once read-only mode is in effect the mount can be `:ro`, which makes the guarantee
+structural rather than a config key: nothing in the container could write to the stores
+even if it tried. It is left writable for now because `make populate` needs to write.
 
 ## Ingesting data
 
@@ -180,3 +187,42 @@ Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
 - Restricting execution to specific workflows is [CLIM-863](https://dhis2.atlassian.net/browse/CLIM-863).
 
 Hosting and provisioning is [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
+
+## Open questions
+
+Decisions this repo has taken provisionally, and should settle deliberately.
+
+**Is a local virtualenv path needed at all?** `make run` and `make upgrade` exist alongside
+the Docker path, and `.python-version` plus the `>=3.12,<3.13` bound in `pyproject.toml`
+serve only the virtualenv — the image pins Python through its base image. If deployment is
+Docker-only, all of that can go and the repo becomes a Dockerfile, two compose files and a
+config. If the virtualenv stays, it needs to be because someone actually develops against
+it.
+
+**Upstream publishes no versioned artifacts.** There are no git tags and no releases, and
+`ghcr.io/dhis2/open-climate-service` has exactly one real tag, `main`, rebuilt on every
+push — no `latest`, no semver. So `pyproject.toml` tracks a branch and `compose.ghcr.yml`
+tracks a moving image; neither can be pinned to a version because no version exists. A
+demo instance wants the opposite. Worth asking upstream for `type=semver` tags on release.
+
+**How should the image be pinned?** `compose.yml` builds from `uv.lock`, so it reproduces
+the exact locked commit; `compose.ghcr.yml` pulls whatever `:main` is now. Two files, two
+answers. Inheriting `FROM ghcr.io/dhis2/open-climate-service` was considered and rejected
+because a moving base tag would defeat the lock — but that changes if upstream tags
+releases.
+
+**Should credentials reach the running service?** `env_file` puts everything in `.env` into
+the container, including a CDS key if you keep one there — visible to `docker inspect` and
+anyone who can exec in. The service does not need it: `make populate` injects credentials
+for the duration of that command only. Convenient, but more than least privilege for a
+public instance.
+
+**Read-only is a config key, not a property.** Until PR #329 lands, `read_only: true` does
+nothing, and even afterwards it is one key away from being off. Mounting the data directory
+`:ro` and running behind an allowlist proxy would make it structural instead. See
+[CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
+
+**What belongs in the demo set?** `populate.py` ingests five datasets; the ERA5-Land rows
+need CDS credentials and take roughly a minute per year of monthly data, which makes
+`make populate` a slow first experience. A credential-free subset would run in about two
+minutes.

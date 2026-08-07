@@ -15,13 +15,12 @@ services:
     cap_drop:
       - ALL
     volumes:
-      - data:/app/data
+      # Bind, not a named volume: data has to be reachable from the host so it can be
+      # copied in from elsewhere and served as-is. See "Where the data lives" in README.md.
+      - ${DATA_DIR:-./data}:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 5s
       start_period: 20s
       retries: 3
-
-volumes:
-  data:
