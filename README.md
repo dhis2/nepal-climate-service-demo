@@ -265,12 +265,21 @@ wanted and unavailable. Object-store backing would also retire the absolute-path
 below, since stores would live at a stable URI rather than a machine-specific path.
 Relevant to hosting, [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
 
-**The artifact registry is not portable.** `records.json` stores resolved absolute paths,
-so a data directory is only servable at the path it was ingested under — copy it anywhere
-else and the catalogue is silently empty. `make adopt-data` papers over this, but storing
-paths relative to `data_dir` would remove the problem, and a demo instance whose whole
-premise is "copy stores in from elsewhere" feels like the case that should work by default.
-Worth raising with upstream.
+**The artifact registry is not portable, and need not be.** `records.json` stores resolved
+absolute paths, so a data directory is only servable at the path it was ingested under —
+copy it anywhere else and the catalogue is silently empty.
+
+This is a choice, not a storage constraint. Icechunk accepts relative paths for both create
+and open; the absoluteness comes from `services.py:405` explicitly calling
+`str(store_path.resolve())`. And the path is entirely derivable in the first place:
+`get_icechunk_path` is `DOWNLOAD_DIR / f"{dataset_id}.icechunk"`
+(`downloader.py:221-224`), with the prefix being just the dataset id. So the stored path is
+redundant with `data_dir` plus `dataset_id`, and storing it is what breaks portability.
+
+Recording it relative to `data_dir` — or deriving it and not recording it — would remove
+the problem and make `make adopt-data` unnecessary. For a demo instance whose premise is
+"copy stores in from elsewhere", this is the case that should work by default. Worth
+raising with upstream.
 
 **What belongs in the demo set?** `populate.py` ingests five datasets; the ERA5-Land rows
 need CDS credentials and take roughly a minute per year of monthly data, which makes
