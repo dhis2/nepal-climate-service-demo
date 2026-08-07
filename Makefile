@@ -29,8 +29,11 @@ docker-down: ## Stop the Docker service, keeping the data volume
 CDS_RC ?= $(HOME)/.ecmwfdatastoresrc
 
 adopt-data: ## Repoint copied-in stores at this data directory, so they are served
-	@docker compose -f $(COMPOSE) exec -T api python - /app/data < adopt_data.py 2>/dev/null \
-		|| python3 adopt_data.py $${DATA_DIR:-data}
+	@if docker compose -f $(COMPOSE) exec -T api true 2>/dev/null; then \
+		docker compose -f $(COMPOSE) exec -T api python - /app/data < adopt_data.py; \
+	else \
+		python3 adopt_data.py $${DATA_DIR:-data}; \
+	fi
 
 populate: ## Ingest the demo datasets, into the container if one is up, else the virtualenv
 	@$(LOAD_ENV) \

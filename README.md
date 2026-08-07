@@ -132,7 +132,15 @@ one is up, and against `./data` otherwise.
 **Ownership differs by platform.** Docker Desktop on macOS remaps ownership, so the
 container reads and writes host files whatever they are owned by. On Linux the host uid is
 preserved, and the container runs as 999 — so `chown -R 999:999 data` on the host, or the
-service cannot write, and cannot read files that are not world-readable.
+service cannot write, and cannot read files that are not world-readable. The image creates
+and chowns `/app/data`, but a bind mount masks that, so it is no help here; the service
+creates the directories it needs at runtime, given it can write at all.
+
+**The published port is loopback-only.** `compose.yml` binds `127.0.0.1`, matching
+`make run`, because the instance is writable and unauthenticated — published on all
+interfaces it would offer `/manage` and every ingestion endpoint to the network. Set
+`BIND_ADDR=0.0.0.0` to change that, and only behind the allowlist proxy in Deployment
+notes.
 
 Alternating between the container and the virtualenv leaves duplicate records pointing at
 each path. Nothing breaks — the service logs `Ignoring stale artifact … backing storage is

@@ -25,7 +25,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY climate-service.yaml ./
 
-# data_dir is ./data, so /app/data. Owned by ocs so the compose volume inherits it.
+# data_dir is ./data, so /app/data. A bind mount masks this, and the service creates what
+# it needs at runtime — this only seeds a named volume, which inherits the ownership.
 RUN mkdir -p /app/data/artifacts /app/data/jobs /app/data/openeo_jobs && \
     printf '[]\n' > /app/data/artifacts/records.json && \
     chown -R ocs:ocs /app/data

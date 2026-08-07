@@ -8,7 +8,9 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "${PORT:-8003}:8003"
+      # Loopback by default: the instance is writable and unauthenticated, so it must
+      # not be reachable from the network. Set BIND_ADDR=0.0.0.0 deliberately.
+      - "${BIND_ADDR:-127.0.0.1}:${PORT:-8003}:8003"
     env_file:
       - path: .env
         required: false
