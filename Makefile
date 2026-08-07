@@ -24,6 +24,25 @@ docker-run: ## Start the service in Docker
 docker-down: ## Stop the Docker service, keeping the data volume
 	docker compose -f $(COMPOSE) down
 
+# ERA5-Land needs Copernicus CDS credentials: from .env if set, otherwise from the rc
+# file the CDS docs tell you to create. Passed in for this command only, never baked in.
+CDS_RC ?= $(HOME)/.ecmwfdatastoresrc
+
+populate: ## Ingest the demo datasets into the running Docker instance
+	@$(LOAD_ENV) \
+	docker compose -f $(COMPOSE) exec -T api true 2>/dev/null || { \
+		echo "no running container -- start it with 'make docker-run'"; exit 1; }; \
+	if [ -z "$$ECMWF_DATASTORES_KEY" ] && [ -f "$(CDS_RC)" ]; then \
+		ECMWF_DATASTORES_URL=$$(sed -n 's/^url: *//p' "$(CDS_RC)"); \
+		ECMWF_DATASTORES_KEY=$$(sed -n 's/^key: *//p' "$(CDS_RC)"); \
+	fi; \
+	[ -n "$$ECMWF_DATASTORES_KEY" ] || \
+		echo "note: no CDS credentials in .env or $(CDS_RC) -- ERA5-Land will be skipped"; \
+	docker compose -f $(COMPOSE) exec -T \
+		-e ECMWF_DATASTORES_URL="$$ECMWF_DATASTORES_URL" \
+		-e ECMWF_DATASTORES_KEY="$$ECMWF_DATASTORES_KEY" \
+		api python - $(DATASETS) < populate.py
+
 verify: ## Report what the running instance serves
 	@$(LOAD_ENV) \
 	base=http://127.0.0.1:$(PORT); \
@@ -40,4 +59,4 @@ upgrade: ## Pull the latest open-climate-service and re-lock
 	uv lock --upgrade-package open-climate-service
 	uv sync
 
-.PHONY: help run docker-run docker-down verify upgrade
+.PHONY: help run docker-run docker-down populate verify upgrade

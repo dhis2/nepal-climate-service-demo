@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8003}:8003"
+    env_file:
+      - path: .env
+        required: false
     environment:
       CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
     security_opt:

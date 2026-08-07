@@ -118,33 +118,44 @@ For operator tasks like ingestion, `docker compose exec api sh` gets you a shell
 
 ## Ingesting data
 
-Ingestion is an operator task performed on the host. The HTTP ingestion endpoints happen to
-be reachable on the current pin, but the host-side call is still the supported path — it is
-what lets read-only be absolute once it is in effect, with no exemption, token or trusted
-header that could be misconfigured into a bypass.
-
-ERA5-Land needs Copernicus Climate Data Store credentials in `~/.ecmwfdatastoresrc`;
-CHIRPS3 and WorldPop are public.
+With the instance running, `make populate` ingests a representative demo set — enough that
+the catalogue isn't empty, small enough to stay cheap:
 
 ```bash
-uv run python -c "
-from open_climate_service.ingestions.processes import execute_ingestion
-execute_ingestion(dataset_id='era5land_temperature_monthly', start='2020-01', end='2024-12')
-"
+make docker-run           # in one shell
+make populate             # in another
 ```
 
-A supported CLI for this is [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
+| Dataset | Range | Credentials |
+| ------- | ----- | ----------- |
+| `chirps3_precipitation_daily` | 2026-05-01 → 2026-05-31 | none |
+| `worldpop_population_global2_R2025A_100m` | 2020 → 2025 | none |
+| `era5land_temperature_monthly` | 2020-01 → 2024-12 | CDS |
+| `era5land_precipitation_monthly` | 2020-01 → 2024-12 | CDS |
+| `era5land_temperature_monthly_normal_1991_2020` | its own 1991–2020 period | CDS |
 
-A representative demo set — enough that the catalogue isn't empty, small enough to stay
-cheap:
+The list lives in `populate.py`, which is piped into the container rather than baked into
+the image. Ingest a subset with `make populate DATASETS=chirps3_precipitation_daily`, and
+override ranges with `CHIRPS_START`, `CHIRPS_END`, `ERA5_START`, `ERA5_END`.
 
-| Dataset | Suggested range |
-| ------- | --------------- |
-| `era5land_temperature_monthly` | 2020-01 → 2024-12 |
-| `era5land_precipitation_monthly` | 2020-01 → 2024-12 |
-| `chirps3_precipitation_daily` | a recent month |
-| `worldpop_population_global2_R2025A_100m` | 2020 → 2025 |
-| `era5land_temperature_monthly_normal_1991_2020` | the normal is its own dataset |
+The ERA5-Land rows need a **Copernicus CDS** key — get one from your profile at
+[cds.climate.copernicus.eu](https://cds.climate.copernicus.eu) and accept the licence for
+each ERA5-Land dataset. `make populate` reads it from `ECMWF_DATASTORES_URL` and
+`ECMWF_DATASTORES_KEY` in `.env`, falling back to `~/.ecmwfdatastoresrc`:
+
+```
+url: https://cds.climate.copernicus.eu/api
+key: your-api-key
+```
+
+Without credentials, the ERA5-Land rows are skipped with a note and the public ones still
+run. CHIRPS3 and WorldPop need nothing.
+
+Ingestion is an operator task rather than an HTTP one. The ingestion endpoints happen to be
+reachable on the current pin, but keeping ingestion out of the request path is what lets
+read-only be absolute once it is in effect, with no exemption, token or trusted header that
+could be misconfigured into a bypass. A supported CLI is
+[CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
 
 For scale: a fuller Nepal instance holds ~3.6 GB across 11 stores, dominated by a 3.1 GB
 Copernicus DEM. This demo has no DEM, so expect well under 1 GB.

@@ -9,6 +9,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8003}:8003"
+    env_file:
+      - path: .env
+        required: false
     environment:
       CLIMATE_SERVICE_CONFIG: /app/climate-service.yaml
       PORT: 8003
