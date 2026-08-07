@@ -79,12 +79,39 @@ surface rather than finding it by failing.
 
 ## Running it
 
+In a virtualenv:
+
 ```bash
 cp .env.example .env      # set CLIMATE_SERVICE_CONFIG to an absolute path
 make install
 make run                  # http://127.0.0.1:8003
-make verify               # confirm it is up and read-only
+make verify               # report what the instance is actually serving
 ```
+
+In Docker, building from this repo's pin:
+
+```bash
+make docker-up            # http://127.0.0.1:8003
+make verify
+make docker-down
+```
+
+Or from the image upstream publishes, without building:
+
+```bash
+make docker-up COMPOSE=compose.ghcr.yml
+```
+
+`COMPOSE=compose.ghcr.yml` works with every `docker-*` target. The two differ in what
+they pin: `compose.yml` builds from `uv.lock`, so the container is the exact commit this
+repo locked and a rebuild never moves on its own. `compose.ghcr.yml` pulls
+`ghcr.io/dhis2/open-climate-service:main`, which tracks upstream's `main` branch and moves
+when upstream does. Use the built image when you want the pin to hold; use the published
+one to try the instance without a build. The published image is `linux/amd64` only, so it
+runs emulated on arm64.
+
+Both run as the `ocs` user (uid/gid 999) and keep ingested data in a named `data` volume.
+`make docker-shell` gets you a shell inside for operator tasks.
 
 ## Ingesting data
 

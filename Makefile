@@ -2,6 +2,10 @@
 
 PORT ?= 8003
 
+# Override to run the published image instead of building:
+#   make docker-up COMPOSE=compose.ghcr.yml
+COMPOSE ?= compose.yml
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
@@ -22,22 +26,22 @@ upgrade: ## Pull the latest open-climate-service and re-lock
 	uv sync
 
 docker-build: ## Build the container image
-	docker compose build
+	docker compose -f $(COMPOSE) build
 
 docker-run: ## Start the service in Docker in the foreground
-	docker compose up --build
+	docker compose -f $(COMPOSE) up --build
 
 docker-up: ## Start the service in Docker, detached
-	docker compose up -d --build
+	docker compose -f $(COMPOSE) up -d --build
 
 docker-down: ## Stop the Docker service, keeping the data volume
-	docker compose down
+	docker compose -f $(COMPOSE) down
 
 docker-logs: ## Follow the container logs
-	docker compose logs -f
+	docker compose -f $(COMPOSE) logs -f
 
 docker-shell: ## Shell into the running container, for operator tasks like ingestion
-	docker compose exec api sh
+	docker compose -f $(COMPOSE) exec api sh
 
 verify: ## Check the instance is up, and report whether read-only is in effect
 	@set -a && . ./.env 2>/dev/null || true; set +a; \
