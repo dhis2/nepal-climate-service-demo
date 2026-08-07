@@ -28,6 +28,10 @@ docker-down: ## Stop the Docker service, keeping the data volume
 # file the CDS docs tell you to create. Passed in for this command only, never baked in.
 CDS_RC ?= $(HOME)/.ecmwfdatastoresrc
 
+adopt-data: ## Repoint copied-in stores at this data directory, so they are served
+	@docker compose -f $(COMPOSE) exec -T api python - /app/data < adopt_data.py 2>/dev/null \
+		|| python3 adopt_data.py $${DATA_DIR:-data}
+
 populate: ## Ingest the demo datasets into the running Docker instance
 	@$(LOAD_ENV) \
 	docker compose -f $(COMPOSE) exec -T api true 2>/dev/null || { \
@@ -59,4 +63,4 @@ upgrade: ## Pull the latest open-climate-service and re-lock
 	uv lock --upgrade-package open-climate-service
 	uv sync
 
-.PHONY: help run docker-run docker-down populate verify upgrade
+.PHONY: help run docker-run docker-down adopt-data populate verify upgrade

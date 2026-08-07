@@ -108,11 +108,21 @@ never ingests anything itself.
 
 ```bash
 scp -r stores/* server:/srv/nepal-climate-service-demo/data/
+make adopt-data           # repoint the registry at this directory
+make docker-run
 ```
 
-Anything valid that lands there is served after a restart. Point somewhere else with
-`DATA_DIR=/srv/climate-data make docker-run`. To move an existing named volume onto the
-host: `docker compose cp api:/app/data ./data`.
+Point somewhere else with `DATA_DIR=/srv/climate-data make docker-run`.
+
+**`make adopt-data` is not optional when data comes from elsewhere.** The registry in
+`data/artifacts/records.json` stores *resolved absolute* paths — `services.py:405` writes
+`str(store_path.resolve())`, and `services.py:1167` decides whether a dataset is published
+by testing that exact path exists. Stores ingested in a container are recorded under
+`/app/data`, so on a host expecting `/srv/climate-data` every one of them fails that test
+and the catalogue comes up **empty, with no error**. The same bites moving between the
+container and a virtualenv, whose data directories differ. `adopt-data` rewrites `path` and
+`asset_paths` to the directory the data is actually in; it runs inside the container when
+one is up, and against `./data` otherwise.
 
 **Ownership differs by platform.** Docker Desktop on macOS remaps ownership, so the
 container reads and writes host files whatever they are owned by. On Linux the host uid is
@@ -221,6 +231,13 @@ public instance.
 nothing, and even afterwards it is one key away from being off. Mounting the data directory
 `:ro` and running behind an allowlist proxy would make it structural instead. See
 [CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
+
+**The artifact registry is not portable.** `records.json` stores resolved absolute paths,
+so a data directory is only servable at the path it was ingested under — copy it anywhere
+else and the catalogue is silently empty. `make adopt-data` papers over this, but storing
+paths relative to `data_dir` would remove the problem, and a demo instance whose whole
+premise is "copy stores in from elsewhere" feels like the case that should work by default.
+Worth raising with upstream.
 
 **What belongs in the demo set?** `populate.py` ingests five datasets; the ERA5-Land rows
 need CDS credentials and take roughly a minute per year of monthly data, which makes
