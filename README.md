@@ -212,93 +212,103 @@ Hosting and provisioning is [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-8
 
 Decisions this repo has taken provisionally, and should settle deliberately.
 
-**Is a local virtualenv path needed at all?** `make run` and `make upgrade` exist alongside
-the Docker path, and `.python-version` plus the `>=3.12,<3.13` bound in `pyproject.toml`
-serve only the virtualenv — the image pins Python through its base image. If deployment is
-Docker-only, all of that can go and the repo becomes a Dockerfile, two compose files and a
-config. If the virtualenv stays, it needs to be because someone actually develops against
-it.
+### Is a local virtualenv path needed at all?
 
-**Upstream publishes no versioned artifacts.** There are no git tags and no releases, and
-`ghcr.io/dhis2/open-climate-service` has exactly one real tag, `main`, rebuilt on every
-push — no `latest`, no semver. So `pyproject.toml` tracks a branch and `compose.ghcr.yml`
-tracks a moving image; neither can be pinned to a version because no version exists. A
-demo instance wants the opposite. Worth asking upstream for `type=semver` tags on release.
+`make run` and `make upgrade` exist alongside the Docker path, and `.python-version` plus the
+`>=3.12,<3.13` bound in `pyproject.toml` serve only the virtualenv — the image pins Python
+through its base image. If deployment is Docker-only, all of that can go and the repo becomes a
+Dockerfile, two compose files and a config. If the virtualenv stays, it needs to be because
+someone actually develops against it.
 
-**How should the image be pinned?** `compose.yml` builds from `uv.lock`, so it reproduces
-the exact locked commit; `compose.ghcr.yml` pulls whatever `:main` is now. Two files, two
-answers. Inheriting `FROM ghcr.io/dhis2/open-climate-service` was considered and rejected
-because a moving base tag would defeat the lock — but that changes if upstream tags
-releases.
+### Upstream publishes no versioned artifacts
 
-**Should credentials reach the running service?** `env_file` puts everything in `.env` into
-the container, including a CDS key if you keep one there — visible to `docker inspect` and
-anyone who can exec in. The service does not need it: `make populate` injects credentials
-for the duration of that command only. Convenient, but more than least privilege for a
-public instance.
+There are no git tags and no releases, and `ghcr.io/dhis2/open-climate-service` has exactly one
+real tag, `main`, rebuilt on every push — no `latest`, no semver. So `pyproject.toml` tracks a
+branch and `compose.ghcr.yml` tracks a moving image; neither can be pinned to a version because
+no version exists. A demo instance wants the opposite. Worth asking upstream for `type=semver`
+tags on release.
 
-**Read-only is a config key, not a property.** Until PR #329 lands, `read_only: true` does
-nothing, and even afterwards it is one key away from being off. Mounting the data directory
-`:ro` and running behind an allowlist proxy would make it structural instead. See
-[CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
+### How should the image be pinned?
 
-**Storage is hardcoded to the local filesystem.** Every Icechunk repository is opened with
-`icechunk.local_filesystem_storage(...)` — `ingestions/services.py:661`,
-`data_manager/services/downloader.py:247` and `:346`,
-`data_accessor/services/accessor.py:137`, `streaming/store.py:31`,
-`stac/media_types.py:101` — and there is no `s3_storage`, `gcs_storage` or
-`azure_storage` anywhere, nor any config key for a bucket, endpoint or credentials.
-`get_data_dir()` returns a `Path`, so it cannot carry a URI either.
+`compose.yml` builds from `uv.lock`, so it reproduces the exact locked commit;
+`compose.ghcr.yml` pulls whatever `:main` is now. Two files, two answers. Inheriting `FROM
+ghcr.io/dhis2/open-climate-service` was considered and rejected because a moving base tag would
+defeat the lock — but that changes if upstream tags releases.
+
+### Should credentials reach the running service?
+
+`env_file` puts everything in `.env` into the container, including a CDS key if you keep one
+there — visible to `docker inspect` and anyone who can exec in. The service does not need it:
+`make populate` injects credentials for the duration of that command only. Convenient, but more
+than least privilege for a public instance.
+
+### Read-only is a config key, not a property
+
+Until PR #329 lands, `read_only: true` does nothing, and even afterwards it is one key away
+from being off. Mounting the data directory `:ro` and running behind an allowlist proxy would
+make it structural instead. See [CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
+
+### Storage is hardcoded to the local filesystem
+
+Every Icechunk repository is opened with `icechunk.local_filesystem_storage(...)` —
+`ingestions/services.py:661`, `data_manager/services/downloader.py:247` and `:346`,
+`data_accessor/services/accessor.py:137`, `streaming/store.py:31`, `stac/media_types.py:101` —
+and there is no `s3_storage`, `gcs_storage` or `azure_storage` anywhere, nor any config key for
+a bucket, endpoint or credentials. `get_data_dir()` returns a `Path`, so it cannot carry a URI
+either.
 
 The capability is present but unwired: icechunk 2.1.2 ships `s3_storage`, `gcs_storage`,
-`azure_storage`, `r2_storage`, `tigris_storage` and `http_storage`, so RustFS or MinIO
-would work through `s3_storage` with a custom endpoint. Reading is already more agnostic
-than writing — `open_zarr_dataset` documents handling S3 and GCS URIs — but
-`open_icechunk_dataset` twelve lines below calls `Path.exists()` and then
-`local_filesystem_storage`. Clients are not affected: `/icechunk/` and `/zarr/` serve
-stores over HTTP.
+`azure_storage`, `r2_storage`, `tigris_storage` and `http_storage`, so RustFS or MinIO would
+work through `s3_storage` with a custom endpoint. Reading is already more agnostic than writing
+— `open_zarr_dataset` documents handling S3 and GCS URIs — but `open_icechunk_dataset` twelve
+lines below calls `Path.exists()` and then `local_filesystem_storage`. Clients are not
+affected: `/icechunk/` and `/zarr/` serve stores over HTTP.
 
-This is why ingestion logs `The LocalFileSystem storage is not safe for concurrent
-commits`. Benign here — one uvicorn process, ingestion serialised — but it becomes real
-with multiple workers or concurrent ingestion, which is exactly when an object store is
-wanted and unavailable. Object-store backing would also retire the absolute-path problem
-below, since stores would live at a stable URI rather than a machine-specific path.
-Relevant to hosting, [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
+This is why ingestion logs `The LocalFileSystem storage is not safe for concurrent commits`.
+Benign here — one uvicorn process, ingestion serialised — but it becomes real with multiple
+workers or concurrent ingestion, which is exactly when an object store is wanted and
+unavailable. Object-store backing would also retire the absolute-path problem below, since
+stores would live at a stable URI rather than a machine-specific path. Relevant to hosting,
+[CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
 
-**The artifact registry could easily be portable, and is not.** `records.json` stores
-resolved absolute paths, so a data directory is only servable at the path it was ingested
-under — copy it anywhere else and the catalogue is silently empty.
+### The artifact registry could easily be portable, and is not
 
-This is a choice, not a storage constraint. Icechunk accepts relative paths for both create
-and open; the absoluteness comes from `services.py:405` explicitly calling
+`records.json` stores resolved absolute paths, so a data directory is only servable at the path
+it was ingested under — copy it anywhere else and the catalogue is silently empty.
+
+This is a choice, not a storage constraint. Icechunk accepts relative paths for both create and
+open; the absoluteness comes from `services.py:405` explicitly calling
 `str(store_path.resolve())`. And the path is entirely derivable in the first place:
-`get_icechunk_path` is `DOWNLOAD_DIR / f"{dataset_id}.icechunk"`
-(`downloader.py:221-224`), with the prefix being just the dataset id. So the stored path is
-redundant with `data_dir` plus `dataset_id`, and storing it is what breaks portability.
+`get_icechunk_path` is `DOWNLOAD_DIR / f"{dataset_id}.icechunk"` (`downloader.py:221-224`),
+with the prefix being just the dataset id. So the stored path is redundant with `data_dir` plus
+`dataset_id`, and storing it is what breaks portability.
 
-Recording it relative to `data_dir` — or deriving it and not recording it — would remove
-the problem and make `make adopt-data` unnecessary. For a demo instance whose premise is
-"copy stores in from elsewhere", this is the case that should work by default. Worth
-raising with upstream.
+Recording it relative to `data_dir` — or deriving it and not recording it — would remove the
+problem and make `make adopt-data` unnecessary. For a demo instance whose premise is "copy
+stores in from elsewhere", this is the case that should work by default. Worth raising with
+upstream.
 
-**There is no CLI, so this repo reaches into internals.** `climate-service` is the only
-entry point and it does nothing but start uvicorn — 20 lines, no subcommands, no argument
-parsing, host and port from the environment. So `populate.py` and `adopt_data.py` import
-`open_climate_service.ingestions.processes` and edit `records.json` directly. Those are
-internals with no deprecation cycle, and this repo silently depends on their shape.
-[CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862) proposes a supported CLI; if it
-lands, both scripts should collapse into calls to it. Until then, `make upgrade` can break
-them without warning.
+### There is no CLI, so this repo reaches into internals
 
-**Ports are configurable, but only carefully.** `PORT` sets the host port for both
-`make run` and the compose files; the container always listens on 8003 internally and the
-mapping targets that. The container's `PORT` is pinned in `environment:` for exactly this
-reason — `env_file` would otherwise let a `PORT` in `.env` move the listener off the port
-Docker forwards to, leaving the service unreachable and the healthcheck failing, with
-nothing in the logs to suggest a port mismatch. Worth deciding whether the internal port
-should be configurable at all, or fixed as it is now.
+`climate-service` is the only entry point and it does nothing but start uvicorn — 20 lines, no
+subcommands, no argument parsing, host and port from the environment. So `populate.py` and
+`adopt_data.py` import `open_climate_service.ingestions.processes` and edit `records.json`
+directly. Those are internals with no deprecation cycle, and this repo silently depends on
+their shape. [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862) proposes a supported CLI;
+if it lands, both scripts should collapse into calls to it. Until then, `make upgrade` can
+break them without warning.
 
-**What belongs in the demo set?** `populate.py` ingests five datasets; the ERA5-Land rows
-need CDS credentials and take roughly a minute per year of monthly data, which makes
-`make populate` a slow first experience. A credential-free subset would run in about two
-minutes.
+### Ports are configurable, but only carefully
+
+`PORT` sets the host port for both `make run` and the compose files; the container always
+listens on 8003 internally and the mapping targets that. The container's `PORT` is pinned in
+`environment:` for exactly this reason — `env_file` would otherwise let a `PORT` in `.env` move
+the listener off the port Docker forwards to, leaving the service unreachable and the
+healthcheck failing, with nothing in the logs to suggest a port mismatch. Worth deciding
+whether the internal port should be configurable at all, or fixed as it is now.
+
+### What belongs in the demo set?
+
+`populate.py` ingests five datasets; the ERA5-Land rows need CDS credentials and take roughly a
+minute per year of monthly data, which makes `make populate` a slow first experience. A
+credential-free subset would run in about two minutes.
