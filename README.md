@@ -242,6 +242,29 @@ nothing, and even afterwards it is one key away from being off. Mounting the dat
 `:ro` and running behind an allowlist proxy would make it structural instead. See
 [CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
 
+**Storage is hardcoded to the local filesystem.** Every Icechunk repository is opened with
+`icechunk.local_filesystem_storage(...)` — `ingestions/services.py:661`,
+`data_manager/services/downloader.py:247` and `:346`,
+`data_accessor/services/accessor.py:137`, `streaming/store.py:31`,
+`stac/media_types.py:101` — and there is no `s3_storage`, `gcs_storage` or
+`azure_storage` anywhere, nor any config key for a bucket, endpoint or credentials.
+`get_data_dir()` returns a `Path`, so it cannot carry a URI either.
+
+The capability is present but unwired: icechunk 2.1.2 ships `s3_storage`, `gcs_storage`,
+`azure_storage`, `r2_storage`, `tigris_storage` and `http_storage`, so RustFS or MinIO
+would work through `s3_storage` with a custom endpoint. Reading is already more agnostic
+than writing — `open_zarr_dataset` documents handling S3 and GCS URIs — but
+`open_icechunk_dataset` twelve lines below calls `Path.exists()` and then
+`local_filesystem_storage`. Clients are not affected: `/icechunk/` and `/zarr/` serve
+stores over HTTP.
+
+This is why ingestion logs `The LocalFileSystem storage is not safe for concurrent
+commits`. Benign here — one uvicorn process, ingestion serialised — but it becomes real
+with multiple workers or concurrent ingestion, which is exactly when an object store is
+wanted and unavailable. Object-store backing would also retire the absolute-path problem
+below, since stores would live at a stable URI rather than a machine-specific path.
+Relevant to hosting, [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
+
 **The artifact registry is not portable.** `records.json` stores resolved absolute paths,
 so a data directory is only servable at the path it was ingested under — copy it anywhere
 else and the catalogue is silently empty. `make adopt-data` papers over this, but storing
