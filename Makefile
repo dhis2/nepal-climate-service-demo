@@ -16,7 +16,7 @@ help: ## Show this help
 # TODO: decide whether a local venv is needed at all, or whether Docker is the only
 # supported path. If Docker-only, run and upgrade go.
 run: ## Start the service in a virtualenv, on http://127.0.0.1:8003
-	@$(LOAD_ENV) uv run uvicorn open_climate_service.main:app --port $(PORT)
+	@$(LOAD_ENV) HOST=127.0.0.1 PORT=$(PORT) uv run climate-service
 
 docker-run: ## Start the service in Docker
 	docker compose -f $(COMPOSE) up --build

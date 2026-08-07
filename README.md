@@ -281,6 +281,23 @@ the problem and make `make adopt-data` unnecessary. For a demo instance whose pr
 "copy stores in from elsewhere", this is the case that should work by default. Worth
 raising with upstream.
 
+**There is no CLI, so this repo reaches into internals.** `climate-service` is the only
+entry point and it does nothing but start uvicorn — 20 lines, no subcommands, no argument
+parsing, host and port from the environment. So `populate.py` and `adopt_data.py` import
+`open_climate_service.ingestions.processes` and edit `records.json` directly. Those are
+internals with no deprecation cycle, and this repo silently depends on their shape.
+[CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862) proposes a supported CLI; if it
+lands, both scripts should collapse into calls to it. Until then, `make upgrade` can break
+them without warning.
+
+**Ports are configurable, but only carefully.** `PORT` sets the host port for both
+`make run` and the compose files; the container always listens on 8003 internally and the
+mapping targets that. The container's `PORT` is pinned in `environment:` for exactly this
+reason — `env_file` would otherwise let a `PORT` in `.env` move the listener off the port
+Docker forwards to, leaving the service unreachable and the healthcheck failing, with
+nothing in the logs to suggest a port mismatch. Worth deciding whether the internal port
+should be configurable at all, or fixed as it is now.
+
 **What belongs in the demo set?** `populate.py` ingests five datasets; the ERA5-Land rows
 need CDS credentials and take roughly a minute per year of monthly data, which makes
 `make populate` a slow first experience. A credential-free subset would run in about two

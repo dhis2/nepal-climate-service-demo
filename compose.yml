@@ -9,6 +9,9 @@ services:
       - path: .env
         required: false
     environment:
+      # Fixed inside the container, after env_file: PORT there sets what the host maps to,
+      # and letting it reach uvicorn would move the listener off the mapped port.
+      PORT: 8003
       CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
     security_opt:
       - no-new-privileges:true
