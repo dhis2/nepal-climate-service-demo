@@ -1,28 +1,20 @@
 services:
   api:
     image: ghcr.io/dhis2/open-climate-service:${OCS_TAG:-main}
-    # :main is rebuilt on every upstream push, so re-pull rather than reuse a stale cache.
     pull_policy: always
-    # Published for linux/amd64 only, so it runs emulated on arm64 hosts.
     platform: linux/amd64
     init: true
     restart: unless-stopped
     ports:
-      # Loopback by default: the instance is writable and unauthenticated, so it must
-      # not be reachable from the network. Set BIND_ADDR=0.0.0.0 deliberately.
       - "${BIND_ADDR:-127.0.0.1}:${PORT:-8003}:8003"
-    env_file:
-      - path: .env
-        required: false
     environment:
-      CLIMATE_SERVICE_CONFIG: /app/climate-service.yaml
       PORT: 8003
+      CLIMATE_SERVICE_CONFIG: /app/climate-service.yaml
       CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     volumes:
-      # Not baked into the upstream image, unlike the one built from this repo.
       - ./climate-service.yaml:/app/climate-service.yaml:ro
       - ${DATA_DIR:-./data}:/app/data

@@ -136,11 +136,19 @@ service cannot write, and cannot read files that are not world-readable. The ima
 and chowns `/app/data`, but a bind mount masks that, so it is no help here; the service
 creates the directories it needs at runtime, given it can write at all.
 
-**The published port is loopback-only.** `compose.yml` binds `127.0.0.1`, matching
+**The published port is loopback-only.** Both compose files bind `127.0.0.1`, matching
 `make run`, because the instance is writable and unauthenticated — published on all
 interfaces it would offer `/manage` and every ingestion endpoint to the network. Set
 `BIND_ADDR=0.0.0.0` to change that, and only behind the allowlist proxy in Deployment
 notes.
+
+**`.env` is read, but only three variables cross into the container.** Compose interpolates
+`PORT`, `CLIMATE_SERVICE_CONFIG` and `CLIMATE_SERVICE_BASE_URL` from `.env` and passes
+nothing else, so CDS credentials kept there stay on the host — `make populate` reads them
+and injects them for that one command. `docker inspect` shows no key. The cost is that a
+new variable in `.env` needs a matching line in both compose files or it silently will not
+arrive. `PORT` is deliberately fixed at 8003 inside the container: it selects the *host*
+port, and letting it through would move the listener off the port Docker forwards to.
 
 Alternating between the container and the virtualenv leaves duplicate records pointing at
 each path. Nothing breaks — the service logs `Ignoring stale artifact … backing storage is
@@ -245,10 +253,12 @@ defeat the lock — but that changes if upstream tags releases.
 
 ### Should credentials reach the running service?
 
-`env_file` puts everything in `.env` into the container, including a CDS key if you keep one
-there — visible to `docker inspect` and anyone who can exec in. The service does not need it:
-`make populate` injects credentials for the duration of that command only. Convenient, but more
-than least privilege for a public instance.
+`.env` now passes only the three variables the service actually uses, so a CDS key kept
+there stays on the host and `make populate` injects it per command. That is the least
+privilege version. The alternative is `env_file`, which passes everything automatically —
+simpler, nothing to keep in step, but the service holds a key it never reads. Related: does
+the deploy host need to ingest at all? If stores are copied in, it needs no credentials and
+no route to the CDS.
 
 ### Read-only is a config key, not a property
 
