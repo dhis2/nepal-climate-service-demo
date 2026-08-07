@@ -32,20 +32,22 @@ adopt-data: ## Repoint copied-in stores at this data directory, so they are serv
 	@docker compose -f $(COMPOSE) exec -T api python - /app/data < adopt_data.py 2>/dev/null \
 		|| python3 adopt_data.py $${DATA_DIR:-data}
 
-populate: ## Ingest the demo datasets into the running Docker instance
+populate: ## Ingest the demo datasets, into the container if one is up, else the virtualenv
 	@$(LOAD_ENV) \
-	docker compose -f $(COMPOSE) exec -T api true 2>/dev/null || { \
-		echo "no running container -- start it with 'make docker-run'"; exit 1; }; \
 	if [ -z "$$ECMWF_DATASTORES_KEY" ] && [ -f "$(CDS_RC)" ]; then \
 		ECMWF_DATASTORES_URL=$$(sed -n 's/^url: *//p' "$(CDS_RC)"); \
 		ECMWF_DATASTORES_KEY=$$(sed -n 's/^key: *//p' "$(CDS_RC)"); \
 	fi; \
+	export ECMWF_DATASTORES_URL ECMWF_DATASTORES_KEY; \
 	[ -n "$$ECMWF_DATASTORES_KEY" ] || \
 		echo "note: no CDS credentials in .env or $(CDS_RC) -- ERA5-Land will be skipped"; \
-	docker compose -f $(COMPOSE) exec -T \
-		-e ECMWF_DATASTORES_URL="$$ECMWF_DATASTORES_URL" \
-		-e ECMWF_DATASTORES_KEY="$$ECMWF_DATASTORES_KEY" \
-		api python - $(DATASETS) < populate.py
+	if docker compose -f $(COMPOSE) exec -T api true 2>/dev/null; then \
+		docker compose -f $(COMPOSE) exec -T \
+			-e ECMWF_DATASTORES_URL -e ECMWF_DATASTORES_KEY \
+			api python - $(DATASETS) < populate.py; \
+	else \
+		uv run python populate.py $(DATASETS); \
+	fi
 
 verify: ## Report what the running instance serves
 	@$(LOAD_ENV) \

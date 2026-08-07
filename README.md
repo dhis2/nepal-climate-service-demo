@@ -107,12 +107,17 @@ somewhere else and copied in, which is the expected path for a read-only instanc
 never ingests anything itself.
 
 ```bash
-scp -r stores/* server:/srv/nepal-climate-service-demo/data/
+scp -r data/* server:/srv/nepal-climate-service-demo/data/
 make adopt-data           # repoint the registry at this directory
-make docker-run
 ```
 
 Point somewhere else with `DATA_DIR=/srv/climate-data make docker-run`.
+
+**Copy the whole data directory, not just the stores.** `data/artifacts/records.json` is
+the registry — there is no directory scan, so a store copied in without its record is
+never discovered. **No restart is needed**: the lookup is cached against that file's mtime
+(`services.py:623`), so writing it invalidates the cache and the next request picks the
+change up.
 
 **`make adopt-data` is not optional when data comes from elsewhere.** The registry in
 `data/artifacts/records.json` stores *resolved absolute* paths — `services.py:405` writes
@@ -128,6 +133,11 @@ one is up, and against `./data` otherwise.
 container reads and writes host files whatever they are owned by. On Linux the host uid is
 preserved, and the container runs as 999 — so `chown -R 999:999 data` on the host, or the
 service cannot write, and cannot read files that are not world-readable.
+
+Alternating between the container and the virtualenv leaves duplicate records pointing at
+each path. Nothing breaks — the service logs `Ignoring stale artifact … backing storage is
+missing` and skips them — but the registry accumulates cruft, so it is worth settling on
+one runtime.
 
 Once read-only mode is in effect the mount can be `:ro`, which makes the guarantee
 structural rather than a config key: nothing in the container could write to the stores
