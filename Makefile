@@ -21,7 +21,7 @@ run: ## Start the service in a virtualenv, on http://127.0.0.1:8003
 docker-run: ## Start the service in Docker
 	docker compose -f $(COMPOSE) up --build
 
-docker-down: ## Stop the Docker service, keeping the data volume
+docker-down: ## Stop the Docker service, leaving ./data in place
 	docker compose -f $(COMPOSE) down
 
 # ERA5-Land needs Copernicus CDS credentials: from .env if set, otherwise from the rc

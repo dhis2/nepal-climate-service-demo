@@ -23,24 +23,32 @@ def main() -> int:
         return 1
 
     entries = json.loads(records.read_text())
-    downloads = str(data_dir / "downloads")
     changed = 0
 
-    def repoint(value: str) -> str:
+    def repoint(value: str, old_root: str) -> str:
+        """Swap the data directory, keeping the path below it intact."""
         nonlocal changed
-        # Keep the store's own filename; replace whatever directory it was written under.
-        new = f"{downloads}/{Path(value).name}"
+        if not value.startswith(f"{old_root}/"):
+            return value  # outside the old data directory — not ours to move
+        new = str(data_dir / Path(value).relative_to(old_root))
         if new != value:
             changed += 1
         return new
 
     for entry in entries:
+        # Stores are always <data_dir>/downloads/<id>.icechunk, so the recorded path
+        # gives the data directory this entry was written under.
+        anchor = entry.get("path")
+        if not isinstance(anchor, str):
+            continue
+        old_root = str(Path(anchor).parent.parent)
+
         for field in PATH_FIELDS:
             value = entry.get(field)
             if isinstance(value, str):
-                entry[field] = repoint(value)
+                entry[field] = repoint(value, old_root)
             elif isinstance(value, list):
-                entry[field] = [repoint(v) if isinstance(v, str) else v for v in value]
+                entry[field] = [repoint(v, old_root) if isinstance(v, str) else v for v in value]
 
     if not changed:
         print(f"{len(entries)} records already point at {data_dir}")

@@ -36,11 +36,13 @@ def main() -> int:
 
     have_credentials = bool(os.getenv("ECMWF_DATASTORES_KEY"))
     failed: list[str] = []
+    skipped = ingested = 0
 
     for dataset_id, start, end in datasets:
         span = f"{start} -> {end}" if start else "own period"
         if NEEDS_CREDENTIALS in dataset_id and not have_credentials:
             print(f"SKIP  {dataset_id} ({span}) -- no CDS credentials")
+            skipped += 1
             continue
 
         print(f"START {dataset_id} ({span})", flush=True)
@@ -51,12 +53,16 @@ def main() -> int:
             failed.append(dataset_id)
             print(f"FAIL  {dataset_id}: {type(exc).__name__}: {exc}", flush=True)
         else:
+            ingested += 1
             print(f"OK    {dataset_id} in {time.monotonic() - began:.0f}s", flush=True)
 
+    summary = f"\n{ingested} ingested"
+    if skipped:
+        summary += f", {skipped} skipped"
     if failed:
-        print(f"\n{len(failed)} of {len(datasets)} failed: {', '.join(failed)}", file=sys.stderr)
+        print(f"{summary}, {len(failed)} failed: {', '.join(failed)}", file=sys.stderr)
         return 1
-    print(f"\n{len(datasets)} ingested")
+    print(summary)
     return 0
 
 

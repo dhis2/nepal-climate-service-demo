@@ -78,8 +78,9 @@ make verify
 ```
 
 No setup step either way: `uv run` syncs the environment itself, and the config in this
-repo is used by default. Copy `.env.example` to `.env` only to point
-`CLIMATE_SERVICE_CONFIG` somewhere else or to set `CLIMATE_SERVICE_BASE_URL`.
+repo is used by default. Copy `.env.example` to `.env` to set `CLIMATE_SERVICE_BASE_URL`
+behind a proxy, point `CLIMATE_SERVICE_CONFIG` at a different file, or hold the Copernicus
+credentials `make populate` needs.
 
 ### Which image
 
