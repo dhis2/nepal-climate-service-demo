@@ -32,8 +32,8 @@ verify: ## Report what the running instance serves
 	get() { curl -sf --max-time 10 "$$1" 2>/dev/null || echo '{}'; }; \
 	printf 'read_only  : '; get $$base/info | python3 -c 'import sys,json;v=json.load(sys.stdin).get("read_only");print(v if v is not None else "NOT ENFORCED -- writable (upstream main lacks PR #329)")'; \
 	printf 'extent     : '; get $$base/extent | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("name","?"), d.get("bbox","?"))'; \
-	printf 'ingest     : '; code=$$(curl -s -o /dev/null --max-time 10 -w '%{http_code}' -X POST $$base/ingestions -H 'Content-Type: application/json' -d '{}'); \
-		case $$code in 403) echo "$$code refused -- read-only in effect";; 000) echo "no response";; *) echo "$$code accepted -- instance is writable";; esac; \
+	printf 'manage     : '; code=$$(curl -s -o /dev/null --max-time 10 -w '%{http_code}' $$base/manage); \
+		case $$code in 403) echo "403 refused -- read-only in effect";; 000) echo "no response";; *) echo "$$code reachable -- instance is writable";; esac; \
 	printf 'datasets   : '; get $$base/datasets | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items",[])), "published")'
 
 upgrade: ## Pull the latest open-climate-service and re-lock
