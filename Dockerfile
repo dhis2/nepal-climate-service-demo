@@ -10,9 +10,8 @@ ENV MPLCONFIGDIR=/tmp
 # curl: HEALTHCHECK
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends git curl && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get update && \
+    apt-get install -y --no-install-recommends git curl
 
 RUN groupadd --gid 999 ocs && \
     useradd --no-create-home --shell /usr/sbin/nologin --uid 999 --gid 999 ocs

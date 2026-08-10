@@ -1,20 +1,11 @@
+# Overlay for compose.yml: run the image upstream publishes instead of building this
+# repo's pin. Layered on top of the base, never used alone --
+#   make docker-run COMPOSE=compose.ghcr.yml
+# which expands to `docker compose -f compose.yml -f compose.ghcr.yml`. Everything else,
+# including ports, config mount, data mount and healthcheck, comes from compose.yml.
 services:
   api:
+    build: !reset null
     image: ghcr.io/dhis2/open-climate-service:${OCS_TAG:-main}
     pull_policy: always
     platform: linux/amd64
-    init: true
-    restart: unless-stopped
-    ports:
-      - "${BIND_ADDR:-127.0.0.1}:${PORT:-8003}:8003"
-    environment:
-      PORT: 8003
-      CLIMATE_SERVICE_CONFIG: /app/climate-service.yaml
-      CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    volumes:
-      - ./climate-service.yaml:/app/climate-service.yaml:ro
-      - ${DATA_DIR:-./data}:/app/data

@@ -7,16 +7,29 @@ services:
       - "${BIND_ADDR:-127.0.0.1}:${PORT:-8003}:8003"
     environment:
       PORT: 8003
-      CLIMATE_SERVICE_CONFIG: ${CLIMATE_SERVICE_CONFIG:-/app/climate-service.yaml}
+      # The config is bind-mounted below at this fixed path, whatever it is called on the
+      # host, so CLIMATE_SERVICE_CONFIG stays a host path and means the same thing here as
+      # it does in a virtualenv.
+      CLIMATE_SERVICE_CONFIG: /app/climate-service.yaml
       CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     volumes:
+      # Long syntax on purpose: short syntax reads a source with no leading ./ or / as a
+      # *named volume*, so `CLIMATE_SERVICE_CONFIG=other.yaml` would silently mount an
+      # empty volume instead of the file. type: bind is never guessed.
+      - type: bind
+        source: ${CLIMATE_SERVICE_CONFIG:-./climate-service.yaml}
+        target: /app/climate-service.yaml
+        read_only: true
       - ${DATA_DIR:-./data}:/app/data
+    # Kept here rather than left to the image: the published image compose.ghcr.yml pulls
+    # defines no HEALTHCHECK. $$PORT is the container's own, so there is no second copy of
+    # the port to keep in step.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:$${PORT}/health || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 20s
