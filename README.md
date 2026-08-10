@@ -57,8 +57,11 @@ only because the process graph travels in the body, and it cannot publish a data
 jobs close entirely: there is no request identity, so the job namespace would be shared
 between visitors.
 
-`make verify` reports the current state — run it after every deploy and every
-`make upgrade`, since the pin tracks a moving branch.
+`make verify` reports the current state and **exits nonzero while the instance is
+writable**, so it can gate a deploy. It passes only when both signals agree: `/info`
+reports `read_only: true` *and* `/manage` is not served. On the current pin it fails, which
+is correct — run it after every deploy and every `make upgrade`, since the pin tracks a
+moving branch.
 
 ## Running it
 
@@ -66,7 +69,7 @@ In Docker:
 
 ```bash
 make docker-run           # http://127.0.0.1:8003
-make verify               # in another shell — reports what the instance serves
+make verify               # in another shell — reports, and fails if writable
 make docker-down
 ```
 
@@ -79,8 +82,14 @@ make verify
 
 No setup step either way: `uv run` syncs the environment itself, and the config in this
 repo is used by default. Copy `.env.example` to `.env` to set `CLIMATE_SERVICE_BASE_URL`
-behind a proxy, point `CLIMATE_SERVICE_CONFIG` at a different file, or hold the Copernicus
-credentials `make populate` needs.
+behind a proxy, point `CLIMATE_SERVICE_CONFIG` at a different file, change `PORT`, or hold
+the Copernicus credentials `make populate` needs.
+
+`CLIMATE_SERVICE_CONFIG` is always a path on *this host*, and it means the same thing in
+both runtimes: in a virtualenv the service reads it directly, and under Docker compose
+bind-mounts it read-only over `/app/climate-service.yaml`, which is where the container's
+`CLIMATE_SERVICE_CONFIG` points. Relative paths resolve from the repo root either way, and
+an absolute host path works too.
 
 ### Which image
 
@@ -95,7 +104,13 @@ make docker-run COMPOSE=compose.ghcr.yml
 That pulls `ghcr.io/dhis2/open-climate-service:main`, which tracks upstream's `main` and
 moves when upstream does — it re-pulls on every start rather than reusing a stale cache.
 It is `linux/amd64` only, so it runs emulated on arm64. `COMPOSE=compose.ghcr.yml` works
-with `docker-down` too.
+with `docker-down`, `adopt-data` and `populate` too.
+
+`compose.yml` is the base and holds the whole service definition; `compose.ghcr.yml` is an
+**overlay** carrying only the four lines that differ (drop the `build:`, add the image, the
+pull policy and the platform). `COMPOSE=` layers it on top, expanding to
+`docker compose -f compose.yml -f compose.ghcr.yml`, so the two files cannot drift: ports,
+mounts, hardening and healthcheck are defined once.
 
 Both run as the `ocs` user (uid/gid 999). For operator tasks, `docker compose exec api sh`
 gets you a shell inside.
@@ -137,19 +152,22 @@ service cannot write, and cannot read files that are not world-readable. The ima
 and chowns `/app/data`, but a bind mount masks that, so it is no help here; the service
 creates the directories it needs at runtime, given it can write at all.
 
-**The published port is loopback-only.** Both compose files bind `127.0.0.1`, matching
+**The published port is loopback-only.** `compose.yml` binds `127.0.0.1`, matching
 `make run`, because the instance is writable and unauthenticated — published on all
 interfaces it would offer `/manage` and every ingestion endpoint to the network. Set
 `BIND_ADDR=0.0.0.0` to change that, and only behind the allowlist proxy in Deployment
 notes.
 
-**`.env` is read, but only three variables cross into the container.** Compose interpolates
-`PORT`, `CLIMATE_SERVICE_CONFIG` and `CLIMATE_SERVICE_BASE_URL` from `.env` and passes
-nothing else, so CDS credentials kept there stay on the host — `make populate` reads them
-and injects them for that one command. `docker inspect` shows no key. The cost is that a
-new variable in `.env` needs a matching line in both compose files or it silently will not
-arrive. `PORT` is deliberately fixed at 8003 inside the container: it selects the *host*
-port, and letting it through would move the listener off the port Docker forwards to.
+**`.env` is read, but almost nothing crosses into the container.** Compose interpolates
+`BIND_ADDR`, `PORT`, `DATA_DIR` and `CLIMATE_SERVICE_CONFIG` on the *host* side — they pick
+the published address and port and the two bind mount sources — and passes exactly one
+variable through to the process, `CLIMATE_SERVICE_BASE_URL`. Nothing else is passed, so CDS
+credentials kept in `.env` stay on the host: `make populate` reads them and injects them
+for that one command, and `docker inspect` shows no key. The cost is that a new variable in
+`.env` needs a matching line in `compose.yml` or it silently will not arrive — one file,
+since `compose.ghcr.yml` is an overlay that carries only the image. `PORT` is deliberately
+fixed at 8003 inside the container: it selects the *host* port, and letting it through
+would move the listener off the port Docker forwards to.
 
 Alternating between the container and the virtualenv leaves duplicate records pointing at
 each path. Nothing breaks — the service logs `Ignoring stale artifact … backing storage is
@@ -176,11 +194,20 @@ make populate             # in another
 | `worldpop_population_global2_R2025A_100m` | 2020 → 2025 | none |
 | `era5land_temperature_monthly` | 2020-01 → 2024-12 | CDS |
 | `era5land_precipitation_monthly` | 2020-01 → 2024-12 | CDS |
-| `era5land_temperature_monthly_normal_1991_2020` | its own 1991–2020 period | CDS |
 
 The list lives in `populate.py`, which is piped into the container rather than baked into
 the image. Ingest a subset with `make populate DATASETS=chirps3_precipitation_daily`, and
 override ranges with `CHIRPS_START`, `CHIRPS_END`, `ERA5_START`, `ERA5_END`.
+
+**The monthly normals are not ingested.** `era5land_*_monthly_normal_1991_2020` and the
+CHIRPS3 equivalents have no ingestion plugin at all — they are *output* templates for the
+`climate_normal` openEO workflow, which computes month-of-year means from an already
+ingested store and publishes them via `save_result`. Producing them means ingesting the
+source dataset over 1991–2020 and then running that workflow as a batch job (`POST /jobs`,
+`POST /jobs/{id}/results`), which is far more than a demo set needs. The day-of-year
+`era5land_*_daily_normal_1991_2020` templates *do* have a plugin — they read the reference
+period straight from the Earth Data Hub — and could be ingested if the demo ever wants
+normals.
 
 The ERA5-Land rows need a **Copernicus CDS** key — get one from your profile at
 [cds.climate.copernicus.eu](https://cds.climate.copernicus.eu) and accept the licence for
@@ -225,6 +252,67 @@ Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
 
 Hosting and provisioning is [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
 
+## Second-pass review findings — fixed on this branch
+
+A full review of this branch found ten further defects beyond the six bugs the first pass
+caught. All ten are fixed here; they are recorded because each says something about how the
+pieces interact.
+
+1. **`make populate` could never fully succeed.** The demo set included the 1991–2020
+   monthly temperature normals with no period, but upstream has no ingestion plugin for the
+   monthly normals at all — they are output templates for the `climate_normal` openEO
+   workflow — and a historical dataset with no start is a 400 regardless. Every
+   credentialed run therefore ended FAIL, and without credentials the ERA5-Land skip masked
+   it. The row is removed; see [Ingesting data](#ingesting-data).
+2. **`make verify` could not fail on a writable instance.** After the `/health` gate every
+   probe was informational: it printed "NOT ENFORCED -- writable" and still exited 0, so
+   using it to gate a deploy passed vacuously — and 404/401/3xx from `/manage` were all
+   mislabeled "reachable". It now passes only when `/info` reports `read_only: true` *and*
+   `/manage` is not served, reports each status class honestly, and exits nonzero with a
+   `FAIL:` line otherwise.
+3. **The documented `CLIMATE_SERVICE_CONFIG` override was broken under Docker.** An
+   alternate file crash-looped the container under `compose.yml` — the image ships only the
+   repo's config, and nothing mounted the user's file — and was silently ignored under
+   `compose.ghcr.yml`, which hardcoded the variable. Compose now bind-mounts the host file
+   read-only at a fixed container path, so the variable is a host path with one meaning in
+   both runtimes.
+4. **`make adopt-data` could corrupt a live registry.** It rewrote `records.json` with a
+   plain truncating write from a list read at startup: a record appended by a concurrent
+   ingestion was silently clobbered, and the mtime-watching server could read the file
+   half-written. The script now redoes the rewrite against a freshly read file immediately
+   before writing, and replaces the file atomically via a temp file and `os.replace`.
+5. **Registry entries with `path: null` were skipped, and the old-root guess was fragile.**
+   Upstream's `path` is optional — readers fall back to `asset_paths[0]` — so such records
+   are real, yet their asset paths were left stale and the record dropped out of the
+   catalogue. And the old data directory was taken as `parent.parent` of the store, which
+   mis-rewrote any record at a different depth. The anchor now falls back to the first
+   asset path, the `downloads` segment is located explicitly, and an unrecognised layout
+   is warned about and left untouched instead of guessed at.
+6. **`make populate` dropped the range overrides when a container was up.** The docker
+   branch forwarded only the two ECMWF credential variables, so the documented
+   `CHIRPS_START`/`CHIRPS_END`/`ERA5_START`/`ERA5_END` overrides silently fell back to the
+   defaults — while the virtualenv branch honoured them. All four are now forwarded.
+7. **`make adopt-data` resolved the data directory by different rules than compose.** Its
+   host branch read `DATA_DIR` only from the process environment, skipping `.env` — which
+   compose reads natively — so with the container down it could operate on the wrong
+   registry. It now sources `.env` the same way `populate` does.
+8. **`PORT` set only in `.env` split the port.** Compose published the `.env` value, but
+   `make verify` probed and `make run` listened on make's already-expanded default, because
+   sourcing `.env` inside a recipe cannot change a make-level `$(PORT)`. Recipes now
+   resolve the port in the shell after sourcing `.env`, with the same precedence compose
+   uses: explicit environment or command line, then `.env`, then 8003.
+9. **The two compose files duplicated the whole service definition and had already
+   drifted.** The healthcheck existed only in `compose.yml` and hardcoded port 8003, and
+   the `CLIMATE_SERVICE_CONFIG` handling differed between the files. `compose.ghcr.yml` is
+   now a five-line overlay on the base — image, pull policy, platform, no build — layered
+   via `-f compose.yml -f compose.ghcr.yml`. The healthcheck stays in the base on purpose,
+   because the published image defines none, and it now reads the container's own `PORT`.
+10. **The Dockerfile's apt layer defeated itself.** `apt-get upgrade -y` made two builds of
+    the same commit produce different images, and `rm -rf /var/lib/apt/lists/*` deleted the
+    package indexes inside the BuildKit cache mount — the one thing the mount exists to
+    keep — saving zero image bytes while forcing full index re-downloads. The layer is now
+    just `apt-get update && apt-get install -y --no-install-recommends git curl`.
+
 ## Open questions
 
 Decisions this repo has taken provisionally, and should settle deliberately.
@@ -234,8 +322,8 @@ Decisions this repo has taken provisionally, and should settle deliberately.
 `make run` and `make upgrade` exist alongside the Docker path, and `.python-version` plus the
 `>=3.12,<3.13` bound in `pyproject.toml` serve only the virtualenv — the image pins Python
 through its base image. If deployment is Docker-only, all of that can go and the repo becomes a
-Dockerfile, two compose files and a config. If the virtualenv stays, it needs to be because
-someone actually develops against it.
+Dockerfile, a compose file with its overlay, and a config. If the virtualenv stays, it needs to
+be because someone actually develops against it.
 
 ### Upstream publishes no versioned artifacts
 
@@ -247,14 +335,15 @@ tags on release.
 
 ### How should the image be pinned?
 
-`compose.yml` builds from `uv.lock`, so it reproduces the exact locked commit;
-`compose.ghcr.yml` pulls whatever `:main` is now. Two files, two answers. Inheriting `FROM
+`compose.yml` builds from `uv.lock`, so it reproduces the exact locked commit; the
+`compose.ghcr.yml` overlay swaps that for whatever `:main` is now. Two answers, and only the
+default is reproducible. Inheriting `FROM
 ghcr.io/dhis2/open-climate-service` was considered and rejected because a moving base tag would
 defeat the lock — but that changes if upstream tags releases.
 
 ### Should credentials reach the running service?
 
-`.env` now passes only the three variables the service actually uses, so a CDS key kept
+`.env` now passes only the variables the service actually uses, so a CDS key kept
 there stays on the host and `make populate` injects it per command. That is the least
 privilege version. The alternative is `env_file`, which passes everything automatically —
 simpler, nothing to keep in step, but the service holds a key it never reads. Related: does
@@ -319,15 +408,20 @@ break them without warning.
 
 ### Ports are configurable, but only carefully
 
-`PORT` sets the host port for both `make run` and the compose files; the container always
-listens on 8003 internally and the mapping targets that. The container's `PORT` is pinned in
-`environment:` for exactly this reason — `env_file` would otherwise let a `PORT` in `.env` move
-the listener off the port Docker forwards to, leaving the service unreachable and the
-healthcheck failing, with nothing in the logs to suggest a port mismatch. Worth deciding
-whether the internal port should be configurable at all, or fixed as it is now.
+`PORT` sets the host port for `make run`, `make verify` and the compose files; the container
+always listens on 8003 internally and the mapping targets that. The container's `PORT` is
+pinned in `environment:` for exactly this reason — `env_file` would otherwise let a `PORT` in
+`.env` move the listener off the port Docker forwards to, leaving the service unreachable and
+the healthcheck failing, with nothing in the logs to suggest a port mismatch.
+
+The make targets resolve `PORT` the way compose does, so the same `.env` gives the same
+answer everywhere: an explicit `make … PORT=9000` wins, then `.env`, then the 8003 default.
+That is why the recipes read `$PORT` after sourcing `.env` rather than letting make expand it
+first. Worth deciding whether the internal port should be configurable at all, or fixed as it
+is now.
 
 ### What belongs in the demo set?
 
-`populate.py` ingests five datasets; the ERA5-Land rows need CDS credentials and take roughly a
+`populate.py` ingests four datasets; the ERA5-Land rows need CDS credentials and take roughly a
 minute per year of monthly data, which makes `make populate` a slow first experience. A
 credential-free subset would run in about two minutes.
