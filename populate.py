@@ -12,15 +12,19 @@ import time
 
 from open_climate_service.ingestions.processes import execute_ingestion
 
-# (dataset_id, start, end) -- the table in README.md. A range of None means the
-# dataset defines its own period, as the 1991-2020 normals do.
-DATASETS: list[tuple[str, str | None, str | None]] = [
+# (dataset_id, start, end) -- the table in README.md. Every row needs an explicit range:
+# a dataset with historical periods and no start is a 400 upstream (services.py:1023).
+#
+# The *_normal_1991_2020 templates are deliberately absent. They have no ingestion plugin
+# at all (era5_land.yaml:228) -- they are output templates for the `climate_normal` openEO
+# workflow, which is a batch job over an already-ingested store covering 1991-2020, not
+# something this script can ingest.
+DATASETS: list[tuple[str, str, str]] = [
     # Daily period type, so full dates -- a single recent month keeps this cheap.
     ("chirps3_precipitation_daily", os.getenv("CHIRPS_START", "2026-05-01"), os.getenv("CHIRPS_END", "2026-05-31")),
     ("worldpop_population_global2_R2025A_100m", "2020", "2025"),
     ("era5land_temperature_monthly", os.getenv("ERA5_START", "2020-01"), os.getenv("ERA5_END", "2024-12")),
     ("era5land_precipitation_monthly", os.getenv("ERA5_START", "2020-01"), os.getenv("ERA5_END", "2024-12")),
-    ("era5land_temperature_monthly_normal_1991_2020", None, None),
 ]
 
 # ERA5-Land pulls from the Copernicus CDS and needs credentials; the others are public.
@@ -39,7 +43,7 @@ def main() -> int:
     skipped = ingested = 0
 
     for dataset_id, start, end in datasets:
-        span = f"{start} -> {end}" if start else "own period"
+        span = f"{start} -> {end}"
         if NEEDS_CREDENTIALS in dataset_id and not have_credentials:
             print(f"SKIP  {dataset_id} ({span}) -- no CDS credentials")
             skipped += 1
