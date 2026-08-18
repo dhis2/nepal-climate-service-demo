@@ -66,6 +66,30 @@ finding it by failing.
 
 ## Running it
 
+### Docker
+
+```bash
+docker compose up -d --build     # http://127.0.0.1:8003
+make verify                      # confirm it is up and read-only
+```
+
+No `.env` is needed. Set `PORT` in one to publish somewhere other than 8003, and
+`CLIMATE_SERVICE_BASE_URL` behind a reverse proxy.
+
+Two things are mounted from the host, so both survive a rebuild and can be edited without
+touching the image:
+
+| Host | Container | |
+| ---- | --------- | --- |
+| `./climate-service.yaml` | `/app/climate-service.yaml` | read-only; restart to pick up an edit |
+| `./data` | `/app/data` | ingested stores |
+
+`./data` is host-mounted rather than a named volume because this instance is read-only:
+stores are produced elsewhere and copied in. The container runs as uid 999, so on Linux
+`chown -R 999:999 data` before starting — Docker Desktop on macOS remaps ownership itself.
+
+### Virtualenv
+
 ```bash
 cp .env.example .env      # set CLIMATE_SERVICE_CONFIG to an absolute path
 make install

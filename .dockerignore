@@ -1,0 +1,18 @@
+.venv/
+.git/
+.env
+data/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.claude/
+.ruff_cache/
+.pytest_cache/
+
+# Not part of the image
+Dockerfile
+.dockerignore
+compose.yml
+Makefile
+README.md

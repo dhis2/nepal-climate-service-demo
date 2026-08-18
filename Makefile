@@ -9,11 +9,11 @@ install: ## Install dependencies with uv
 	uv sync
 
 run: ## Start the service (read-only, per climate-service.yaml)
-	set -a && . ./.env && set +a && \
+	set -a && [ -f .env ] && . ./.env; set +a && \
 		uv run uvicorn open_climate_service.main:app --port $(PORT)
 
 dev: ## Start with autoreload, for editing the config
-	set -a && . ./.env && set +a && \
+	set -a && [ -f .env ] && . ./.env; set +a && \
 		uv run uvicorn open_climate_service.main:app --reload \
 			--reload-include "*.yaml" --reload-include "*.yml" --port $(PORT)
 
@@ -22,7 +22,7 @@ upgrade: ## Pull the latest open-climate-service and re-lock
 	uv sync
 
 verify: ## Check the instance is up and actually read-only
-	@set -a && . ./.env && set +a && \
+	@set -a && [ -f .env ] && . ./.env; set +a && \
 	base=http://127.0.0.1:$(PORT); \
 	printf 'read_only  : '; curl -sf $$base/info | python3 -c 'import sys,json;print(json.load(sys.stdin)["read_only"])'; \
 	printf 'extent     : '; curl -sf $$base/extent | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["name"], d["bbox"])'; \
