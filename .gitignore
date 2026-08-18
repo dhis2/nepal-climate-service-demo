@@ -8,3 +8,8 @@ __pycache__/
 .DS_Store
 .ruff_cache/
 .pytest_cache/
+
+# Local config overrides. Never commit these: the whole point of read_only: true in the
+# tracked config is that a public instance cannot be made writable by accident.
+climate-service.local.yaml
+climate-service.*.local.yaml

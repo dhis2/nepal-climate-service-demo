@@ -1,0 +1,30 @@
+- id: clms_gpp_dekadal
+  name: Gross Primary Production (CLMS)
+  short_name: GPP
+  variable: gpp
+  standard_name: gross_primary_productivity_of_biomass_expressed_as_carbon
+  # A dekad is the 1st, 11th or 21st of a month, and the third runs to the month's end — so 8
+  # to 11 days. No ISO duration describes that, and `dekadal` makes Open Climate Service
+  # publish a null STAC step with the real timestamps rather than implying a regular one.
+  period_type: dekadal
+  sync:
+    kind: temporal
+    execution: append
+  extents:
+    spatial:
+      bbox: [-180, -90, 180, 90]
+    temporal:
+      begin: "2014-01-01"
+      # No `resolution`: no ISO duration describes all three dekads, and one declared here is
+      # ignored for an irregular cadence rather than published as if true.
+  ingestion:
+    plugin: datasets.clms_gpp.ClmsGppPlugin
+    params: {}
+  units: "g C m-2 day-1"
+  cell_methods: "time: mean"
+  resolution: 300m x 300m
+  source: Copernicus Land Monitoring Service — CLMS GPP 300m v2 (via CDSE)
+  source_url: https://land.copernicus.eu/global/products/gpp
+  display:
+    colormap: YlGn
+    range: [0.0, 15.0]

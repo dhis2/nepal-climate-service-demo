@@ -4,20 +4,23 @@ version = "0.1.0"
 requires-python = ">=3.12"
 description = "Public demo instance of Open Climate Service, configured to the Nepal extent"
 dependencies = [
-    # Tracks git main rather than a PyPI release *on purpose*, and only until read-only
-    # mode ships. CLIM-848 asks for a released pin so demos don't break on main, but
-    # `read_only: true` (CLIM-861) is not in 0.1.0 — and an unrecognised config key is
-    # silently ignored, which would leave this public instance fully writable. Tracking
-    # main is the lesser risk of the two.
-    #
-    # TODO: re-pin to `open-climate-service[server]==<first release with read-only mode>`
-    # and drop the [tool.uv.sources] block below.
+    # See the [tool.uv.sources] note below on why this tracks git main rather than a release.
     "open-climate-service[server]",
+    "boto3>=1.34",
 ]
 
-# No instance-specific dependencies: this demo runs the built-in datasets only, and their
-# runtime deps (ecmwf-datastores-client for ERA5-Land, netcdf4) are part of the [server]
-# extra. Anything added here would mean a custom plugin had crept in.
+# Instance dependency for the one custom plugin. The built-in datasets need nothing here —
+# their runtime deps (ecmwf-datastores-client for ERA5-Land, netcdf4) come with the [server]
+# extra. `boto3` is for clms_gpp.py: rasterio refuses AWS config options passed to Env
+# ("handled exclusively by boto3"), so the CDSE S3 keys have to go through AWSSession.
+
+[dependency-groups]
+dev = ["pytest>=8", "pyyaml"]
+
+[tool.pytest.ini_options]
+# `package = false`, so make the plugin modules importable the same way the running service
+# does — plugins_dir is added to sys.path at startup.
+pythonpath = ["plugins"]
 
 [tool.uv]
 package = false
@@ -40,9 +43,10 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-# Temporarily the read-only branch, not main: read-only mode is unmerged (PR #329), and on
-# a build without it `read_only: true` is silently ignored and this public instance serves
-# every write endpoint. Verified by observation, not assumed — on main, `POST /ingestions`
-# returns 422 rather than 403 and `/info` has no `read_only` field at all.
-# Switch back to `branch = "main"` the moment #329 lands, then re-pin to a release.
-open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "feat/read-only-mode" }
+# Tracks git main rather than a release. Read-only mode and the dekadal period type are both
+# on main and not in 0.1.0, and this instance needs both.
+#
+# TODO: re-pin to `open-climate-service[server]==<version>` once a release carries them, and
+# drop this block. Tracking a branch means `make upgrade` can bring breaking changes —
+# `make test` is the guard.
+open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "main" }
