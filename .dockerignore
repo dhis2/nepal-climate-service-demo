@@ -1,4 +1,3 @@
-# The build context needs climate-service.yaml and nothing else. data/ especially: the
-# ingested stores run to gigabytes and would be uploaded to the daemon on every build.
 *
 !climate-service.yaml
+!plugins

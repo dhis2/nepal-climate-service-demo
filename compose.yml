@@ -3,16 +3,11 @@ services:
     build: .
     init: true
     restart: unless-stopped
-    # The container always listens on 8003 (ENV PORT in the Dockerfile); PORT here only
-    # chooses the published host port, so setting it cannot break the mapping.
     ports:
       - "${PORT:-8003}:8003"
     environment:
-      # Public base URL, so STAC/openEO links are right behind a reverse proxy.
       CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
     volumes:
-      # The instance config, read-only: edit it on the host and restart.
       - ./climate-service.yaml:/app/climate-service.yaml:ro
-      # Ingested stores, on the host rather than in a named volume: this instance is
-      # read-only, so data is produced elsewhere and copied into ./data.
+      - ./plugins:/app/plugins:ro
       - ./data:/app/data
