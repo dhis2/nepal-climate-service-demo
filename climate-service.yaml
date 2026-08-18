@@ -19,5 +19,7 @@ data_dir: ./data
 # pinning note in pyproject.toml.
 read_only: true
 
-# No plugins_dir: this instance deliberately runs the built-in datasets, processes and
-# workflows only, so it demonstrates stock Open Climate Service behaviour.
+# One instance plugin: the CLMS GPP dekadal dataset (plugins/datasets/clms_gpp.py). It is here
+# because it exercises two things the built-in datasets do not — a dekadal (irregular) cadence
+# and a credentialed S3 source. Everything else this instance serves is built in.
+plugins_dir: ./plugins

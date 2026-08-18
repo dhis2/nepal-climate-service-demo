@@ -18,12 +18,17 @@ Tracked in [CLIM-848](https://dhis2.atlassian.net/browse/CLIM-848).
 Nepal's terrain and monsoon climate make it a good showcase for temperature and
 precipitation, and the country extent keeps the ingested stores small.
 
-## Stock Open Climate Service, deliberately
+## Almost entirely stock Open Climate Service
 
-This instance ships **no custom datasets, processes or workflows** — there is no
-`plugins_dir`. Everything it serves is built in, so what you see here is what a stock
-install does. That also means there is nothing instance-specific to keep working as the
-core service moves.
+Everything here is built in **except one dataset plugin**, so what you see is close to what a
+stock install does, with very little instance-specific code to keep working as the core
+service moves.
+
+The exception is `plugins/datasets/clms_gpp.py` — CLMS Gross Primary Production. It
+demonstrates two things no built-in does: a **dekadal** cadence, where the third dekad of a
+month is 8 to 11 days long and the STAC step is therefore null rather than a duration, and a
+**credentialed S3 source** read with GDAL range requests. Both are patterns instance authors
+ask about, and a demo showing only the easy cases does not answer them.
 
 Available from the built-in templates:
 
@@ -80,7 +85,22 @@ what lets the switch be absolute: there is no exemption, token or trusted header
 be misconfigured into a bypass.
 
 ERA5-Land needs Copernicus Climate Data Store credentials in `~/.ecmwfdatastoresrc`;
-CHIRPS3 and WorldPop are public.
+CHIRPS3 and WorldPop are public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
+([register](https://dataspace.copernicus.eu/), then
+[generate keys](https://eodata-s3keysmanager.dataspace.copernicus.eu/)), from either the
+environment or an `~/.aws/credentials` profile:
+
+```bash
+CDSE_S3_ACCESS_KEY=<ACCESS-KEY>     # checked first
+CDSE_S3_SECRET_KEY=<SECRET-KEY>
+```
+
+```ini
+# ~/.aws/credentials
+[cdse]
+aws_access_key_id = <ACCESS-KEY>
+aws_secret_access_key = <SECRET-KEY>
+```
 
 ```bash
 uv run python -c "
