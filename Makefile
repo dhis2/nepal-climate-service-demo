@@ -11,6 +11,12 @@ docker-build: ## Build the container image
 docker-run: ## Start the container in the foreground
 	docker compose up
 
+docker-start: ## Start the container in the background
+	docker compose up -d
+
+docker-stop: ## Stop and remove the container
+	docker compose down
+
 test: ## Run the plugin contract checks (no network, no credentials)
 	docker compose run --rm --no-deps --user root -v $(CURDIR)/tests:/app/tests:ro api \
 		sh -c 'uv pip install --python /app/.venv/bin/python -q pytest pyyaml && \
@@ -23,4 +29,4 @@ verify: ## Check the instance is up and actually read-only
 	printf 'ingest 403 : '; test "$$(curl -s -o /dev/null -w '%{http_code}' -X POST $$base/ingestions -H 'Content-Type: application/json' -d '{}')" = 403 && echo yes || echo "NO -- instance is writable!"; \
 	printf 'datasets   : '; curl -sf $$base/datasets | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items",[])), "published")'
 
-.PHONY: help docker-build docker-run test verify
+.PHONY: help docker-build docker-run docker-start docker-stop test verify
