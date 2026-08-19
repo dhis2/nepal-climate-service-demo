@@ -37,10 +37,32 @@ Afterwards the store and the API disagree:
 | store, `0/gpp` | `(6, 1378, 2739)` -- 2024-01-01/11/21, 02-01/11/21 |
 | `GET /datasets` | `2024-01-01 -> 2024-01-21` |
 
-Half the data is present and unreachable. Seen the same way on `chirps3_precipitation_daily`
-and `era5land_temperature_monthly`.
+It compounds. A later ingest through `/manage` for 2025-08-19..2026-08-19 fetched every
+dekad up to the availability limit and left:
 
-Workaround: ingest the whole range in one call, or pass `overwrite=True`.
+| | |
+| --- | --- |
+| store | **39 dekads**, 2024-01-01 -> 2026-07-01, monotonic, 260 MB |
+| `GET /datasets` | `2024-01-01 -> 2024-01-21` (3 dekads) |
+
+92% of what was downloaded is unreachable, and nothing after the failed call says so. Seen
+the same way on `chirps3_precipitation_daily` and `era5land_temperature_monthly`.
+
+**Only the registry is wrong** -- the store is intact and correctly ordered. Editing the
+record's `coverage.temporal` and `request_scope` to the store's real range, then restarting,
+restores the whole series without re-downloading:
+
+```python
+r["coverage"]["temporal"] = {"start": "2024-01-01", "end": "2026-07-01"}
+r["request_scope"] = {**r["request_scope"], "start": "2024-01-01", "end": "2026-07-01"}
+```
+
+Verified afterwards: `POST /result` over 2026-06 returns all three June dekads, gpp mean
+9.502 g C m-2 day-1 against 2.135 in January -- the monsoon signal, so the late data is real
+and was simply hidden.
+
+Workaround: ingest the whole range in one call, or tick **Overwrite if already ingested**
+(`overwrite=True`).
 
 ---
 
