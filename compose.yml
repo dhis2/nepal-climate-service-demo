@@ -7,6 +7,13 @@ services:
       - "${PORT:-8003}:8003"
     environment:
       CLIMATE_SERVICE_BASE_URL: ${CLIMATE_SERVICE_BASE_URL:-}
+      # Ingestion credentials, for /manage on an instance with read_only: false. Empty
+      # unless set in .env -- so keep .env off the deploy host, where read_only makes
+      # them unusable anyway.
+      CDSE_S3_ACCESS_KEY: ${CDSE_S3_ACCESS_KEY:-}
+      CDSE_S3_SECRET_KEY: ${CDSE_S3_SECRET_KEY:-}
+      ECMWF_DATASTORES_URL: ${ECMWF_DATASTORES_URL:-}
+      ECMWF_DATASTORES_KEY: ${ECMWF_DATASTORES_KEY:-}
     volumes:
       - ./climate-service.yaml:/app/climate-service.yaml:ro
       - ./plugins:/app/plugins:ro

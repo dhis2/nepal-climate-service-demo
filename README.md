@@ -114,8 +114,12 @@ aws_access_key_id = <ACCESS-KEY>
 aws_secret_access_key = <SECRET-KEY>
 ```
 
-Credentials are never given to the running service. They are passed to a throwaway
-container for the length of the ingestion, so the public instance holds none:
+`compose.yml` passes the ingestion credentials in from `.env`, so `/manage` can ingest on
+an instance running with `read_only: false`. They are empty unless set, so a host without
+a `.env` gives the container none -- **keep `.env` off the deploy host**, where `read_only`
+makes them unusable anyway and their only effect is to sit in the process environment.
+
+To ingest without giving them to the running service at all, use a throwaway container:
 
 ```bash
 set -a; . ./.env; set +a
