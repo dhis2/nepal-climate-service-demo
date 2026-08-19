@@ -21,6 +21,12 @@ upgrade: ## Pull the latest open-climate-service and re-lock
 	uv lock --upgrade-package open-climate-service
 	uv sync
 
+docker-build: ## Build the container image
+	docker compose build
+
+docker-run: ## Start the container in the foreground
+	docker compose up
+
 test: ## Run the plugin contract checks (no network, no credentials)
 	uv run --group dev python -m pytest tests/ -q
 
@@ -32,4 +38,4 @@ verify: ## Check the instance is up and actually read-only
 	printf 'ingest 403 : '; test "$$(curl -s -o /dev/null -w '%{http_code}' -X POST $$base/ingestions -H 'Content-Type: application/json' -d '{}')" = 403 && echo yes || echo "NO -- instance is writable!"; \
 	printf 'datasets   : '; curl -sf $$base/datasets | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items",[])), "published")'
 
-.PHONY: help install run dev upgrade test verify
+.PHONY: help install run dev upgrade docker-build docker-run test verify
