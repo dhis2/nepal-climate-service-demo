@@ -1,3 +1,5 @@
 *
+!pyproject.toml
+!uv.lock
 !climate-service.yaml
 !plugins

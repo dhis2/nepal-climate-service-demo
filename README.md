@@ -71,12 +71,24 @@ finding it by failing.
 
 ## Running it
 
+Docker is the only supported way to run this instance. The image is built on
+`ghcr.io/dhis2/open-climate-service`, so the service and its dependencies come from
+upstream's published build; this repository adds the config, the plugins and their
+dependencies.
+
 ```bash
-cp .env.example .env      # set CLIMATE_SERVICE_CONFIG to an absolute path
-make install
-make run                  # http://127.0.0.1:8003
+make docker-run           # http://127.0.0.1:8003, foreground
 make verify               # confirm it is up and read-only
 ```
+
+No `.env` is needed to serve. `PORT` selects the published host port, and
+`CLIMATE_SERVICE_BASE_URL` sets the public URL behind a reverse proxy.
+
+`climate-service.yaml`, `plugins/` and `./data` are bind-mounted from the host, so the
+first two can be edited without a rebuild. Anything `climate-service.yaml` points at must
+also be mounted, or the container will not find it.
+
+`make test` runs the plugin contract checks inside the same image.
 
 ## Ingesting data
 
@@ -102,12 +114,23 @@ aws_access_key_id = <ACCESS-KEY>
 aws_secret_access_key = <SECRET-KEY>
 ```
 
+Credentials are never given to the running service. They are passed to a throwaway
+container for the length of the ingestion, so the public instance holds none:
+
 ```bash
-uv run python -c "
+set -a; . ./.env; set +a
+docker compose run --rm --no-deps \
+  -e CDSE_S3_ACCESS_KEY -e CDSE_S3_SECRET_KEY \
+  -e ECMWF_DATASTORES_URL -e ECMWF_DATASTORES_KEY \
+  api python -c "
 from open_climate_service.ingestions.processes import execute_ingestion
 execute_ingestion(dataset_id='era5land_temperature_monthly', start='2020-01', end='2024-12')
 "
 ```
+
+Stores are written to `./data` on the host, which the serving container mounts. Paths are
+recorded as the container sees them, so ingest through the container rather than copying a
+store in from elsewhere.
 
 A supported CLI for this is [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
 
@@ -127,9 +150,10 @@ Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
 
 ## Deployment notes
 
-- **Pin to a release.** `pyproject.toml` currently tracks git `main`, because read-only
-  mode is not in 0.1.0 and shipping without it would leave this instance writable. Re-pin
-  to the first release that contains it — see the TODO in `pyproject.toml`.
+- **Pin the image.** The Dockerfile tracks `ghcr.io/dhis2/open-climate-service:main`, and
+  that tag moves — upstream rebuilds it on every merge, so a rebuild can change the service
+  under you. Pin a digest for anything long-lived. `main` is the only tag upstream
+  publishes; switch to a release tag once one exists.
 - **Set `CLIMATE_SERVICE_BASE_URL`** to the public HTTPS URL, or STAC and openEO links will
   point at the internal host.
 - **CORS** is already permissive on the data and STAC routes, which is what browser clients
