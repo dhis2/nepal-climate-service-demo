@@ -1,15 +1,17 @@
-# Upstream's published image, not a build of our own: it already installs the service,
-# creates the non-root `ocs` user it runs as, sets WORKDIR /app and defines a HEALTHCHECK.
-# None of that is repeated here, and this repo's pyproject.toml/uv.lock govern only the
-# virtualenv path.
-#
-# `main` is the only tag upstream publishes -- there is no release yet. It moves, so pin
-# the digest here once this instance needs to stay on a known build.
+# `main` is upstream's only published tag, and it moves. Pin a digest when this
+# instance needs to sit on a known build.
 FROM ghcr.io/dhis2/open-climate-service:main
 
-# Baked in so the image also runs standalone. compose.yml mounts the host copy over this,
-# so the config can be edited without a rebuild.
+# The image brings the service and its dependencies; pyproject.toml brings what the
+# instance plugins add on top.
+USER root
+COPY pyproject.toml ./
+RUN uv pip install --python /app/.venv/bin/python -r pyproject.toml
+USER ocs
+
+# Also bind-mounted by compose, so both can be edited without a rebuild.
 COPY climate-service.yaml /app/climate-service.yaml
+COPY plugins/ /app/plugins/
 
 ENV CLIMATE_SERVICE_CONFIG=/app/climate-service.yaml
 ENV PORT=8003

@@ -71,21 +71,38 @@ finding it by failing.
 
 ## Running it
 
+Docker is the only supported way to run this instance. The image is built on
+`ghcr.io/dhis2/open-climate-service`, so the service and its dependencies come from
+upstream's published build; this repository adds the config, the plugins and their
+dependencies.
+
 ```bash
-cp .env.example .env      # set CLIMATE_SERVICE_CONFIG to an absolute path
-make install
-make run                  # http://127.0.0.1:8003
+make docker-run           # http://127.0.0.1:8003, foreground
 make verify               # confirm it is up and read-only
 ```
 
+No `.env` is needed to serve. `PORT` selects the published host port, and
+`CLIMATE_SERVICE_BASE_URL` sets the public URL behind a reverse proxy.
+
+`climate-service.yaml`, `plugins/` and `./data` are bind-mounted from the host, so the
+first two can be edited without a rebuild. Anything `climate-service.yaml` points at must
+also be mounted, or the container will not find it.
+
+`make test` runs the plugin contract checks inside the same image.
+
 ## Ingesting data
 
-Read-only applies to HTTP, so ingestion is an operator task performed on the host. This is
-what lets the switch be absolute: there is no exemption, token or trusted header that could
-be misconfigured into a bypass.
+Read-only applies to HTTP, so ingestion is an operator task, not something a visitor can
+trigger. This is what lets the switch be absolute: there is no exemption, token or trusted
+header that could be misconfigured into a bypass.
 
-ERA5-Land needs Copernicus Climate Data Store credentials in `~/.ecmwfdatastoresrc`;
-CHIRPS3 and WorldPop are public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
+Ingest **through the container**, either from `/manage` on an instance running with
+`read_only: false`, or with the throwaway container below. The artifact registry records
+absolute paths, so a store ingested anywhere else is recorded at a path the container
+cannot resolve and is dropped at startup as a stale artifact.
+
+ERA5-Land needs Copernicus Climate Data Store credentials; CHIRPS3 and WorldPop are
+public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
 ([register](https://dataspace.copernicus.eu/), then
 [generate keys](https://eodata-s3keysmanager.dataspace.copernicus.eu/)), from either the
 environment or an `~/.aws/credentials` profile:
@@ -102,12 +119,30 @@ aws_access_key_id = <ACCESS-KEY>
 aws_secret_access_key = <SECRET-KEY>
 ```
 
+`compose.yml` passes the ingestion credentials in from `.env`, so `/manage` can ingest on
+an instance running with `read_only: false`. They are empty unless set, so a host without
+a `.env` gives the container none -- **keep `.env` off the deploy host**, where `read_only`
+makes them unusable anyway and their only effect is to sit in the process environment.
+
+To ingest without giving them to the running service at all, use a throwaway container:
+
 ```bash
-uv run python -c "
+set -a; . ./.env; set +a
+docker compose run --rm --no-deps \
+  -e CDSE_S3_ACCESS_KEY -e CDSE_S3_SECRET_KEY \
+  -e ECMWF_DATASTORES_URL -e ECMWF_DATASTORES_KEY \
+  api python -c "
 from open_climate_service.ingestions.processes import execute_ingestion
 execute_ingestion(dataset_id='era5land_temperature_monthly', start='2020-01', end='2024-12')
 "
 ```
+
+Stores are written to `./data` on the host, which the serving container mounts.
+
+**Ingest a whole range in one call, or tick "Overwrite if already ingested".** Extending an
+existing dataset with a second, adjacent ingestion writes the new periods and then fails the
+coverage check, leaving the registry pointing at the old range -- the data is in the store
+but the catalogue does not advertise it, and nothing after the failure says so.
 
 A supported CLI for this is [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
 
@@ -127,9 +162,10 @@ Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
 
 ## Deployment notes
 
-- **Pin to a release.** `pyproject.toml` currently tracks git `main`, because read-only
-  mode is not in 0.1.0 and shipping without it would leave this instance writable. Re-pin
-  to the first release that contains it — see the TODO in `pyproject.toml`.
+- **Pin the image.** The Dockerfile tracks `ghcr.io/dhis2/open-climate-service:main`, and
+  that tag moves — upstream rebuilds it on every merge, so a rebuild can change the service
+  under you. Pin a digest for anything long-lived. `main` is the only tag upstream
+  publishes; switch to a release tag once one exists.
 - **Set `CLIMATE_SERVICE_BASE_URL`** to the public HTTPS URL, or STAC and openEO links will
   point at the internal host.
 - **CORS** is already permissive on the data and STAC routes, which is what browser clients

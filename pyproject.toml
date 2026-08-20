@@ -3,50 +3,19 @@ name = "nepal-climate-service-demo"
 version = "0.1.0"
 requires-python = ">=3.12"
 description = "Public demo instance of Open Climate Service, configured to the Nepal extent"
+# Only what the instance plugins need. open-climate-service itself comes from the base
+# image the Dockerfile builds on, and so does everything it depends on. boto3 is for
+# clms_gpp.py's AWSSession.
 dependencies = [
-    # See the [tool.uv.sources] note below on why this tracks git main rather than a release.
-    "open-climate-service[server]",
     "boto3>=1.34",
 ]
-
-# Instance dependency for the one custom plugin. The built-in datasets need nothing here —
-# their runtime deps (ecmwf-datastores-client for ERA5-Land, netcdf4) come with the [server]
-# extra. `boto3` is for clms_gpp.py: rasterio refuses AWS config options passed to Env
-# ("handled exclusively by boto3"), so the CDSE S3 keys have to go through AWSSession.
 
 [dependency-groups]
 dev = ["pytest>=8", "pyyaml"]
 
 [tool.pytest.ini_options]
-# `package = false`, so make the plugin modules importable the same way the running service
-# does — plugins_dir is added to sys.path at startup.
+# plugins_dir is added to sys.path at startup; do the same so the modules import.
 pythonpath = ["plugins"]
 
 [tool.uv]
 package = false
-# Required for uv to resolve the [server] extra: these relax upstream transitive pins —
-# openeo-pg-parser-networkx pins geojson-pydantic<2 (we need >=2.1.0) and
-# openeo-processes-dask pins an older zarr (Open-EO/openeo-processes-dask#376).
-# Keep in step with the same block in the open-climate-service repo.
-override-dependencies = [
-    "geojson-pydantic>=2.1.0",
-    "zarr>=3.1.6",
-    "pyarrow>=19.0",
-    "xarray>=2025.12.0",
-    "numpy>=2.2",
-    "dask>=2024.1.0",
-    "dask-geopandas>=0.4",
-    "geopandas>=1.1",
-    "xvec>=0.3",
-    "rioxarray>=0.17",
-    "pystac>=1.10",
-]
-
-[tool.uv.sources]
-# Tracks git main rather than a release. Read-only mode and the dekadal period type are both
-# on main and not in 0.1.0, and this instance needs both.
-#
-# TODO: re-pin to `open-climate-service[server]==<version>` once a release carries them, and
-# drop this block. Tracking a branch means `make upgrade` can bring breaking changes —
-# `make test` is the guard.
-open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "main" }
