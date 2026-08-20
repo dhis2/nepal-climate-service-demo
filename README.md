@@ -92,12 +92,17 @@ also be mounted, or the container will not find it.
 
 ## Ingesting data
 
-Read-only applies to HTTP, so ingestion is an operator task performed on the host. This is
-what lets the switch be absolute: there is no exemption, token or trusted header that could
-be misconfigured into a bypass.
+Read-only applies to HTTP, so ingestion is an operator task, not something a visitor can
+trigger. This is what lets the switch be absolute: there is no exemption, token or trusted
+header that could be misconfigured into a bypass.
 
-ERA5-Land needs Copernicus Climate Data Store credentials in `~/.ecmwfdatastoresrc`;
-CHIRPS3 and WorldPop are public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
+Ingest **through the container**, either from `/manage` on an instance running with
+`read_only: false`, or with the throwaway container below. The artifact registry records
+absolute paths, so a store ingested anywhere else is recorded at a path the container
+cannot resolve and is dropped at startup as a stale artifact.
+
+ERA5-Land needs Copernicus Climate Data Store credentials; CHIRPS3 and WorldPop are
+public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
 ([register](https://dataspace.copernicus.eu/), then
 [generate keys](https://eodata-s3keysmanager.dataspace.copernicus.eu/)), from either the
 environment or an `~/.aws/credentials` profile:
@@ -132,9 +137,12 @@ execute_ingestion(dataset_id='era5land_temperature_monthly', start='2020-01', en
 "
 ```
 
-Stores are written to `./data` on the host, which the serving container mounts. Paths are
-recorded as the container sees them, so ingest through the container rather than copying a
-store in from elsewhere.
+Stores are written to `./data` on the host, which the serving container mounts.
+
+**Ingest a whole range in one call, or tick "Overwrite if already ingested".** Extending an
+existing dataset with a second, adjacent ingestion writes the new periods and then fails the
+coverage check, leaving the registry pointing at the old range -- the data is in the store
+but the catalogue does not advertise it, and nothing after the failure says so.
 
 A supported CLI for this is [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
 
