@@ -39,7 +39,7 @@ Available from the built-in templates:
 | WorldPop | Total population, population by age and sex, population change |
 | Normals | 1991–2020 daily and monthly climatological normals for ERA5-Land and CHIRPS3 |
 
-`GET /dataset-templates/` lists them all with their parameters.
+`GET /dataset-templates` lists them all with their parameters.
 
 ## Read-only
 
