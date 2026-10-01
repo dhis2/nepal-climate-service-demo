@@ -19,7 +19,7 @@ data_dir: ./data
 # pinning note in pyproject.toml.
 read_only: true
 
-# One instance plugin: the CLMS GPP dekadal dataset (plugins/datasets/clms_gpp.py). It is here
+# One instance plugin: the CLMS GPP dekadal dataset (plugins/rasters/clms_gpp.py). It is here
 # because it exercises two things the built-in datasets do not — a dekadal (irregular) cadence
 # and a credentialed S3 source. Everything else this instance serves is built in.
 plugins_dir: ./plugins
