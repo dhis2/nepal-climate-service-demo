@@ -18,7 +18,7 @@
       # No `resolution`: no ISO duration describes all three dekads, and one declared here is
       # ignored for an irregular cadence rather than published as if true.
   ingestion:
-    plugin: datasets.clms_gpp.ClmsGppPlugin
+    plugin: rasters.clms_gpp.ClmsGppPlugin
     params: {}
   units: "g C m-2 day-1"
   cell_methods: "time: mean"

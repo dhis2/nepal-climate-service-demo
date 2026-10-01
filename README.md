@@ -24,7 +24,7 @@ Everything here is built in **except one dataset plugin**, so what you see is cl
 stock install does, with very little instance-specific code to keep working as the core
 service moves.
 
-The exception is `plugins/datasets/clms_gpp.py` — CLMS Gross Primary Production. It
+The exception is `plugins/rasters/clms_gpp.py` — CLMS Gross Primary Production. It
 demonstrates two things no built-in does: a **dekadal** cadence, where the third dekad of a
 month is 8 to 11 days long and the STAC step is therefore null rather than a duration, and a
 **credentialed S3 source** read with GDAL range requests. Both are patterns instance authors
@@ -39,7 +39,7 @@ Available from the built-in templates:
 | WorldPop | Total population, population by age and sex, population change |
 | Normals | 1991–2020 daily and monthly climatological normals for ERA5-Land and CHIRPS3 |
 
-`GET /dataset-templates` lists them all with their parameters.
+`GET /data-sources` lists them all with their parameters.
 
 ## Read-only
 
