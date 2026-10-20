@@ -1,0 +1,52 @@
+# Nepal's first three administrative levels from Overture Maps, one collection per level:
+# the country (admin level 0), the 7 provinces (Overture `region`, level 1) and the 77
+# districts (Overture `county`, level 2). `class: land` keeps land areas only. Country
+# defaults to the instance's extent.country_code (NPL). Feature names are Overture's primary
+# names, mostly in Nepali. Bumping `release` selects what the next provider run extracts; it
+# does not trigger one.
+#
+# LICENCE: ODbL-1.0 (divisions incorporate OpenStreetMap) — attribution plus share-alike.
+- id: nepal_country
+  name: Nepal (Overture Maps)
+  description: >-
+    Nepal's national boundary, administrative level 0, from Overture Maps divisions.
+  license: ODbL-1.0
+  attribution: © OpenStreetMap contributors, © Overture Maps Foundation
+  id_property: id
+  provider: overture
+  params:
+    release: 2026-09-23.0
+    theme: divisions
+    filters:
+      subtype: country
+      class: land
+
+- id: nepal_provinces
+  name: Provinces (Overture Maps)
+  description: >-
+    Nepal's 7 provinces, administrative level 1, from Overture Maps divisions.
+  license: ODbL-1.0
+  attribution: © OpenStreetMap contributors, © Overture Maps Foundation
+  id_property: id
+  provider: overture
+  params:
+    release: 2026-09-23.0
+    theme: divisions
+    filters:
+      subtype: region
+      class: land
+
+- id: nepal_districts
+  name: Districts (Overture Maps)
+  description: >-
+    Nepal's 77 districts, administrative level 2, from Overture Maps divisions.
+  license: ODbL-1.0
+  attribution: © OpenStreetMap contributors, © Overture Maps Foundation
+  id_property: id
+  provider: overture
+  params:
+    release: 2026-09-23.0
+    theme: divisions
+    filters:
+      subtype: county
+      class: land

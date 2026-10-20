@@ -20,15 +20,21 @@ precipitation, and the country extent keeps the ingested stores small.
 
 ## Almost entirely stock Open Climate Service
 
-Everything here is built in **except one dataset plugin**, so what you see is close to what a
-stock install does, with very little instance-specific code to keep working as the core
-service moves.
+Everything here is built in **except one dataset plugin and one boundary template**, so what
+you see is close to what a stock install does, with very little instance-specific code to keep
+working as the core service moves.
 
 The exception is `plugins/rasters/clms_gpp.py` — CLMS Gross Primary Production. It
 demonstrates two things no built-in does: a **dekadal** cadence, where the third dekad of a
 month is 8 to 11 days long and the STAC step is therefore null rather than a duration, and a
 **credentialed S3 source** read with GDAL range requests. Both are patterns instance authors
 ask about, and a demo showing only the easy cases does not answer them.
+
+`plugins/vectors/overture_nepal.yaml` adds Nepal's first three administrative levels from
+[Overture Maps](https://docs.overturemaps.org/guides/divisions/) divisions, one feature
+collection each: `nepal_country` (1 feature), `nepal_provinces` (7) and `nepal_districts`
+(77). It configures the built-in `overture` provider and needs no credentials. The data is
+ODbL-1.0: © OpenStreetMap contributors, © Overture Maps Foundation.
 
 Available from the built-in templates:
 
