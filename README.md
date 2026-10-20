@@ -1,7 +1,9 @@
 # Nepal Climate Service — public demo instance
 
 A publicly reachable [Open Climate Service](https://github.com/dhis2/open-climate-service)
-instance configured to the Nepal extent, kept online as a stable demo endpoint.
+instance configured to the Nepal extent, kept online as a stable demo endpoint:
+
+**<https://ocs-demo-nepal.dhis2.org/>**
 
 Tracked in [CLIM-848](https://dhis2.atlassian.net/browse/CLIM-848).
 
@@ -17,6 +19,38 @@ Tracked in [CLIM-848](https://dhis2.atlassian.net/browse/CLIM-848).
 
 Nepal's terrain and monsoon climate make it a good showcase for temperature and
 precipitation, and the country extent keeps the ingested stores small.
+
+## Connecting
+
+| Client | URL |
+| --- | --- |
+| Browser, API overview | <https://ocs-demo-nepal.dhis2.org/> |
+| Map viewer | <https://ocs-demo-nepal.dhis2.org/map> |
+| API docs | <https://ocs-demo-nepal.dhis2.org/docs> |
+| STAC catalogue (STAC Browser, QGIS, pystac) | <https://ocs-demo-nepal.dhis2.org/stac> |
+| openEO (Python client, Web Editor) | `https://ocs-demo-nepal.dhis2.org` |
+| GeoLibre plugin | `https://ocs-demo-nepal.dhis2.org` as the service URL |
+| Datasets and feature collections | `/datasets`, `/collections`, `/features` |
+| Zarr stores (zarr-layer, xarray) | `/zarr/{dataset_id}` |
+
+```python
+import openeo
+connection = openeo.connect("https://ocs-demo-nepal.dhis2.org")
+```
+
+## What it serves
+
+| Dataset | Coverage |
+| --- | --- |
+| `chirps3_precipitation_monthly` | 1990-01 onwards |
+| `era5land_temperature_monthly` | 1990-01 onwards |
+| `chirps3_precipitation_monthly_normal_1991_2020`, `era5land_temperature_monthly_normal_1991_2020` | 1991–2020 monthly normals |
+| `chirps3_precipitation_monthly_anomaly_1991_2020`, `chirps3_precipitation_monthly_relative_anomaly_1991_2020`, `era5land_temperature_monthly_anomaly_1991_2020` | the current year, against the normals |
+| `worldpop_population_global2_100m` | 2015–2030 |
+| `nepal_country`, `nepal_provinces`, `nepal_districts` | Overture Maps boundaries, see below |
+
+The monthly datasets are kept current by scheduled sync (see [Ingesting data](#ingesting-data)).
+`GET /data-sources` lists everything this instance could ingest, with parameters.
 
 ## Almost entirely stock Open Climate Service
 
@@ -36,16 +70,10 @@ collection each: `nepal_country` (1 feature), `nepal_provinces` (7) and `nepal_d
 (77). It configures the built-in `overture` provider and needs no credentials. The data is
 ODbL-1.0: © OpenStreetMap contributors, © Overture Maps Foundation.
 
-Available from the built-in templates:
-
-| Source | Datasets |
-| ------ | -------- |
-| ERA5-Land | 2m temperature and precipitation — daily, monthly, and local-time-from-hourly variants |
-| CHIRPS3 | Daily precipitation |
-| WorldPop | Total population, population by age and sex, population change |
-| Normals | 1991–2020 daily and monthly climatological normals for ERA5-Land and CHIRPS3 |
-
-`GET /data-sources` lists them all with their parameters.
+The built-in data sources cover ERA5-Land (temperature and precipitation, daily, monthly and
+daily-from-hourly), ERA5-HEAT UTCI, CHIRPS3 (daily and monthly), WorldPop (total population
+and population change), Copernicus DEM, and 1991–2020 normals and anomalies for ERA5-Land and
+CHIRPS3.
 
 ## Read-only
 
@@ -68,11 +96,10 @@ finding it by failing.
 
 > **Check this after every deploy.** `read_only` is an ordinary config key, so a build of
 > open-climate-service that predates read-only mode ignores it silently and serves a fully
-> writable instance. `make verify` asserts it, or:
+> writable instance:
 >
 > ```bash
-> curl -s https://<host>/info | grep read_only          # must be true
-> curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/ingestions -d '{}'   # must be 403
+> make verify BASE=https://ocs-demo-nepal.dhis2.org
 > ```
 
 ## Running it
@@ -96,78 +123,97 @@ also be mounted, or the container will not find it.
 
 `make test` runs the plugin contract checks inside the same image.
 
+To update a deployment to the current upstream build:
+
+```bash
+git pull
+docker compose build --pull
+docker compose up -d
+make verify BASE=https://ocs-demo-nepal.dhis2.org
+```
+
 ## Ingesting data
 
 Read-only applies to HTTP, so ingestion is an operator task, not something a visitor can
 trigger. This is what lets the switch be absolute: there is no exemption, token or trusted
 header that could be misconfigured into a bypass.
 
-Ingest **through the container**, either from `/manage` on an instance running with
-`read_only: false`, or with the throwaway container below. The artifact registry records
-absolute paths, so a store ingested anywhere else is recorded at a path the container
-cannot resolve and is dropped at startup as a stale artifact.
+Ingest **through a container on the deploy host**, writing to the same data directory the
+public container serves. The artifact registry records absolute paths, so a store ingested
+anywhere else is recorded at a path the container cannot resolve and is dropped at startup as
+a stale artifact. A published store appears on the public instance without a restart.
 
-ERA5-Land needs Copernicus Climate Data Store credentials; CHIRPS3 and WorldPop are
-public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
+ERA5-Land needs Copernicus Climate Data Store credentials; CHIRPS3, WorldPop and the Overture
+boundaries are public. CLMS GPP needs Copernicus Data Space Ecosystem S3 keys
 ([register](https://dataspace.copernicus.eu/), then
-[generate keys](https://eodata-s3keysmanager.dataspace.copernicus.eu/)), from either the
-environment or an `~/.aws/credentials` profile:
+[generate keys](https://eodata-s3keysmanager.dataspace.copernicus.eu/)):
 
 ```bash
-CDSE_S3_ACCESS_KEY=<ACCESS-KEY>     # checked first
+ECMWF_DATASTORES_URL=https://cds.climate.copernicus.eu/api
+ECMWF_DATASTORES_KEY=<KEY>
+CDSE_S3_ACCESS_KEY=<ACCESS-KEY>
 CDSE_S3_SECRET_KEY=<SECRET-KEY>
 ```
 
-```ini
-# ~/.aws/credentials
-[cdse]
-aws_access_key_id = <ACCESS-KEY>
-aws_secret_access_key = <SECRET-KEY>
-```
+**Keep these out of `.env` on the deploy host.** Compose reads `.env` automatically and
+`compose.yml` passes the credentials into the public container. Put them in a separate,
+owner-only file (for example `worker.env`) that only the ingesting container reads.
 
-`compose.yml` passes the ingestion credentials in from `.env`, so `/manage` can ingest on
-an instance running with `read_only: false`. They are empty unless set, so a host without
-a `.env` gives the container none -- **keep `.env` off the deploy host**, where `read_only`
-makes them unusable anyway and their only effect is to sit in the process environment.
+### Private writable worker
 
-To ingest without giving them to the running service at all, use a throwaway container:
+The hosted demo runs a second Compose project next to the public one: the same image and
+data directory, with `read_only: false`, the scheduler enabled, the credentials from
+`worker.env`, and a port bound to `127.0.0.1` only. It is not routed by the reverse proxy,
+so it is reachable only through an SSH tunnel:
 
 ```bash
-set -a; . ./.env; set +a
+ssh -N -L 8013:127.0.0.1:8013 <deploy-host>
+# then http://localhost:8013/manage, or the API at http://localhost:8013
+```
+
+Its config is `climate-service.yaml` with two changes:
+
+```yaml
+read_only: false
+scheduler:
+  enabled: true
+```
+
+The worker is the only process that runs sync schedules; Open Climate Service allows exactly
+one scheduling process per data directory. Create the schedules from each dataset's
+**Schedule** tab in `/manage`, or with `POST /schedules/sync`. After rebuilding the public
+image, run `docker compose up -d` in the worker's project too, so both run the same build.
+
+### Throwaway container
+
+For a one-off ingest without a long-running writable process:
+
+```bash
+set -a; . ./worker.env; set +a
 docker compose run --rm --no-deps \
   -e CDSE_S3_ACCESS_KEY -e CDSE_S3_SECRET_KEY \
   -e ECMWF_DATASTORES_URL -e ECMWF_DATASTORES_KEY \
   api python -c "
 from open_climate_service.ingestions.processes import execute_ingestion
-execute_ingestion(dataset_id='era5land_temperature_monthly', start='2020-01', end='2024-12')
+execute_ingestion(dataset_id='era5land_temperature_monthly', start='1990-01', end='2026-09')
 "
 ```
-
-Stores are written to `./data` on the host, which the serving container mounts.
 
 **Ingest a whole range in one call, or tick "Overwrite if already ingested".** Extending an
 existing dataset with a second, adjacent ingestion writes the new periods and then fails the
 coverage check, leaving the registry pointing at the old range -- the data is in the store
-but the catalogue does not advertise it, and nothing after the failure says so.
+but the catalogue does not advertise it, and nothing after the failure says so. Scheduled
+sync is the supported way to extend a dataset.
 
-A supported CLI for this is [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
-
-A representative demo set — enough that the catalogue isn't empty, small enough to stay
-cheap:
-
-| Dataset | Suggested range |
-| ------- | --------------- |
-| `era5land_temperature_monthly` | 2020-01 → 2024-12 |
-| `era5land_precipitation_monthly` | 2020-01 → 2024-12 |
-| `chirps3_precipitation_daily` | a recent month |
-| `worldpop_population_global2_R2025A_100m` | 2020 → 2025 |
-| `era5land_temperature_monthly_normal_1991_2020` | the normal is its own dataset |
-
-For scale: a fuller Nepal instance holds ~3.6 GB across 11 stores, dominated by a 3.1 GB
-Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
+A supported CLI for ingestion is [CLIM-862](https://dhis2.atlassian.net/browse/CLIM-862).
 
 ## Deployment notes
 
+- **Hosting.** The demo runs on an NREC VM behind a Traefik reverse proxy, which terminates
+  HTTPS. A host-specific `compose.override.yml` routes the public container through Traefik
+  without publishing a port, sets `CLIMATE_SERVICE_BASE_URL`, and mounts the data
+  directory from a separate data volume. Provisioning is
+  [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).
 - **Pin the image.** The Dockerfile tracks `ghcr.io/dhis2/open-climate-service:main`, and
   that tag moves — upstream rebuilds it on every merge, so a rebuild can change the service
   under you. Pin a digest for anything long-lived. `main` is the only tag upstream
@@ -182,5 +228,3 @@ Copernicus DEM. This demo has no DEM, so expect well under 1 GB.
   permitted by default — and applies request timeouts, body-size limits and per-IP rate
   limiting. Tracked as [CLIM-864](https://dhis2.atlassian.net/browse/CLIM-864).
 - Restricting execution to specific workflows is [CLIM-863](https://dhis2.atlassian.net/browse/CLIM-863).
-
-Hosting and provisioning is [CLIM-857](https://dhis2.atlassian.net/browse/CLIM-857).

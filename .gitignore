@@ -1,4 +1,6 @@
 .env
+# Ingestion credentials for the private worker; see "Ingesting data" in README.md.
+worker.env
 .venv/
 .claude/
 data/
