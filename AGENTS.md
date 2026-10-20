@@ -60,12 +60,17 @@ To check them:
 1. `GET /schedules/sync/{dataset_id}` on the worker for the last run and its result.
 2. `GET https://ocs-demo-nepal.dhis2.org/datasets` for each dataset's temporal extent. A new
    month normally appears in the first half of the following month.
-3. If a source advanced but its anomaly datasets did not, re-derive them for the current
-   year. Normals and anomalies are workflow outputs, not ingestable data sources:
-   `POST /ingestions` refuses them. Create and start an openEO batch job on the worker
-   (`POST /jobs`, then `POST /jobs/{id}/results`) with a `climate_anomaly` process graph.
-   `GET /jobs` on the worker lists the earlier runs; copy one and widen its
-   `temporal_extent`.
+3. Each sync that adds a period triggers a `climate_anomaly` job on the worker (workflow
+   triggers in its config), which recomputes the anomaly over the source's full coverage. Its
+   end should match the source's. If it does not, look for the triggered job in `GET /jobs`
+   on the worker; a failed one shows its attempts in `logs`, and
+   `POST /jobs/{id}/results` re-runs it.
+
+Normals and anomalies are workflow outputs, not ingestable data sources: `POST /ingestions`
+refuses them. To produce one by hand, create and start an openEO batch job on the worker
+(`POST /jobs`, then `POST /jobs/{id}/results`); `GET /jobs` lists earlier runs to copy. A
+manual anomaly run must cover at least the published range, since a rewrite that would shorten
+a published dataset is refused.
 
 A published store appears on the public instance without a restart.
 
