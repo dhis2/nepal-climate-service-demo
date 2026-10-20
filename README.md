@@ -45,11 +45,12 @@ connection = openeo.connect("https://ocs-demo-nepal.dhis2.org")
 | `chirps3_precipitation_monthly` | 1990-01 onwards |
 | `era5land_temperature_monthly` | 1990-01 onwards |
 | `chirps3_precipitation_monthly_normal_1991_2020`, `era5land_temperature_monthly_normal_1991_2020` | 1991–2020 monthly normals |
-| `chirps3_precipitation_monthly_anomaly_1991_2020`, `chirps3_precipitation_monthly_relative_anomaly_1991_2020`, `era5land_temperature_monthly_anomaly_1991_2020` | the current year, against the normals |
+| `chirps3_precipitation_monthly_anomaly_1991_2020`, `chirps3_precipitation_monthly_relative_anomaly_1991_2020`, `era5land_temperature_monthly_anomaly_1991_2020` | 1990-01 onwards, against the normals |
 | `worldpop_population_global2_100m` | 2015–2030 |
 | `nepal_country`, `nepal_provinces`, `nepal_districts` | Overture Maps boundaries, see below |
 
-The monthly datasets are kept current by scheduled sync (see [Ingesting data](#ingesting-data)).
+The monthly datasets are kept current by scheduled sync, and each sync recomputes their
+anomalies (see [Ingesting data](#ingesting-data)).
 `GET /data-sources` lists everything this instance could ingest, with parameters.
 
 ## Almost entirely stock Open Climate Service
@@ -171,15 +172,34 @@ ssh -N -L 8013:127.0.0.1:8013 <deploy-host>
 # then http://localhost:8013/manage, or the API at http://localhost:8013
 ```
 
-Its config is `climate-service.yaml` with two changes:
+Its config is `climate-service.yaml` with `read_only: false`, the scheduler enabled, and
+workflow triggers that recompute each anomaly when its source changes:
 
 ```yaml
 read_only: false
 scheduler:
   enabled: true
+automation:
+  workflow_triggers:
+    - id: chirps3-monthly-anomaly
+      on_update_of: chirps3_precipitation_monthly
+      workflow_id: climate_anomaly
+      arguments:
+        observed_dataset_id: $event.dataset_id
+        normal_dataset_id: chirps3_precipitation_monthly_normal_1991_2020
+        output_dataset_id: chirps3_precipitation_monthly_anomaly_1991_2020
+        variable: precip
+        method: absolute
+        temporal_extent: [$event.current_start, $event.current_end]
+    # chirps3-monthly-relative-anomaly and era5land-monthly-anomaly follow the same shape
 ```
 
-The worker is the only process that runs sync schedules; Open Climate Service allows exactly
+A triggered job that publishes a dataset replaces the whole store, so it computes the source's
+full coverage (`$event.current_start` to `$event.current_end`); Open Climate Service refuses a
+rewrite that would shorten a published dataset. The normals are computed once and do not
+change.
+
+The worker is the only process that runs sync schedules and triggers; Open Climate Service allows exactly
 one scheduling process per data directory. Create the schedules from each dataset's
 **Schedule** tab in `/manage`, or with `POST /schedules/sync`. After rebuilding the public
 image, run `docker compose up -d` in the worker's project too, so both run the same build.
