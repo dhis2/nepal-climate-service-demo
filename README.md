@@ -209,6 +209,9 @@ A supported CLI for ingestion is [CLIM-862](https://dhis2.atlassian.net/browse/C
 
 ## Deployment notes
 
+Operating rules for AI coding assistants maintaining the deployment are in
+[AGENTS.md](AGENTS.md).
+
 - **Hosting.** The demo runs on an NREC VM behind a Traefik reverse proxy, which terminates
   HTTPS. A host-specific `compose.override.yml` routes the public container through Traefik
   without publishing a port, sets `CLIMATE_SERVICE_BASE_URL`, and mounts the data
